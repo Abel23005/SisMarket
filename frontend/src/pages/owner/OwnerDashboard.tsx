@@ -99,6 +99,24 @@ const PROVIDERS = [
   { name: 'Procter & Gamble Peru', contact: 'Carlos Mendoza', email: 'ventas@pg.com.pe', phone: '+51 987 555 444', total: 1560.2, lastOrder: '2026-04-07' },
 ];
 
+function isOpenCashSession(session: CashSession) {
+  return ['abierta', 'open'].includes(session.status);
+}
+
+function getCashSessionLabel(session: CashSession) {
+  return isOpenCashSession(session) ? 'Activo' : 'Cerrado';
+}
+
+function getPaymentMethodLabel(method?: string) {
+  const labels: Record<string, string> = {
+    efectivo: 'Efectivo',
+    tarjeta: 'Tarjeta',
+    yape: 'Yape',
+    plin: 'Plin',
+  };
+  return method ? labels[method] ?? method : 'Efectivo';
+}
+
 export default function OwnerDashboard({
   fullName,
   products,
@@ -193,7 +211,7 @@ function DashboardView({ products, lowStockProducts, sales, cashSessions, loadin
   const topProducts = useMemo(() => getTopProducts(products, sales), [products, sales]);
   const totalStock = products.reduce((sum, product) => sum + product.stock, 0);
   const todayTotal = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0);
-  const openCashSessions = cashSessions.filter((session) => session.status === 'open').length;
+  const openCashSessions = cashSessions.filter(isOpenCashSession).length;
   const stockItems = lowStockProducts.slice(0, 4);
 
   return (
@@ -740,7 +758,7 @@ function SalesView({ sales, loading, onNewSale }: { sales: Sale[]; loading: bool
                     <td className="px-5 py-4">{formatTime(sale.createdAt)}</td>
                     <td className="px-5 py-4">{countSaleItems(sale)}</td>
                     <td className="px-5 py-4 font-semibold">{formatMoney(sale.total)}</td>
-                    <td className="px-5 py-4"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs">{sale.paymentMethod ?? 'Efectivo'}</span></td>
+                    <td className="px-5 py-4"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs">{getPaymentMethodLabel(sale.paymentMethod)}</span></td>
                     <td className="px-5 py-4"><span className="rounded-md bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">{sale.status}</span></td>
                   </tr>
                 ))}
@@ -783,7 +801,7 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
   const [savingCash, setSavingCash] = useState(false);
   const [cashMessage, setCashMessage] = useState('');
   const [cashError, setCashError] = useState('');
-  const activeSession = cashSessions.find((session) => session.status === 'open') ?? null;
+  const activeSession = cashSessions.find(isOpenCashSession) ?? null;
   const displayedSession = activeSession ?? cashSessions[0] ?? null;
   const todayTotal = sales.filter(isTodaySale).reduce((sum, sale) => sum + Number(sale.total), 0);
   const openingAmount = displayedSession ? Number(displayedSession.openingAmount) : 0;
@@ -851,7 +869,7 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Cajero</th><th className="px-5 py-3 font-medium">Fecha</th><th className="px-5 py-3 font-medium">Horario</th><th className="px-5 py-3 font-medium">Ventas</th><th className="px-5 py-3 font-medium">Saldo final</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead>
               <tbody>
-                {cashSessions.map((session) => <tr key={session.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">Caja</td><td className="px-5 py-4">{new Date(session.openedAt).toLocaleDateString('es-PE')}</td><td className="px-5 py-4">{formatTime(session.openedAt)} - {session.closedAt ? formatTime(session.closedAt) : 'Activo'}</td><td className="px-5 py-4">{formatMoney(todayTotal)}</td><td className="px-5 py-4">{session.expectedAmount ? formatMoney(session.expectedAmount) : '--'}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${session.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{session.status === 'open' ? 'Activo' : 'Cerrado'}</span></td></tr>)}
+                {cashSessions.map((session) => <tr key={session.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">Caja</td><td className="px-5 py-4">{new Date(session.openedAt).toLocaleDateString('es-PE')}</td><td className="px-5 py-4">{formatTime(session.openedAt)} - {session.closedAt ? formatTime(session.closedAt) : 'Activo'}</td><td className="px-5 py-4">{formatMoney(todayTotal)}</td><td className="px-5 py-4">{session.expectedAmount ? formatMoney(session.expectedAmount) : '--'}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${isOpenCashSession(session) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{getCashSessionLabel(session)}</span></td></tr>)}
                 {cashSessions.length === 0 && <tr><td className="px-5 py-8 text-slate-500" colSpan={6}>No hay turnos registrados.</td></tr>}
               </tbody>
             </table>
