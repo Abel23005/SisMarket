@@ -61,6 +61,21 @@ export class Sale {
   })
   status: SaleStatus;
 
+
+  @Column({ name: 'nubefact_status', type: 'varchar', length: 30, nullable: true })
+  nubefactStatus: string | null;
+
+  @Column({ name: 'nubefact_pdf_url', type: 'text', nullable: true })
+  nubefactPdfUrl: string | null;
+
+  @Column({ name: 'nubefact_xml_url', type: 'text', nullable: true })
+  nubefactXmlUrl: string | null;
+
+  @Column({ name: 'nubefact_cdr_url', type: 'text', nullable: true })
+  nubefactCdrUrl: string | null;
+
+  @Column({ name: 'nubefact_response', type: 'jsonb', nullable: true })
+  nubefactResponse: Record<string, unknown> | null;
   @OneToMany(() => SaleItem, (item) => item.sale, { cascade: true })
   items: SaleItem[];
 

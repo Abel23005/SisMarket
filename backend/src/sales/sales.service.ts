@@ -6,8 +6,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CashSessionStatus } from '../common/enums/cash-session-status.enum';
+import { PaymentMethod } from '../common/enums/payment-method.enum';
 import { SaleStatus } from '../common/enums/sale-status.enum';
 import { CashSession } from '../cash-register/entities/cash-session.entity';
+import { NubefactService } from '../nubefact/nubefact.service';
 import { Product } from '../products/entities/product.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { SaleItem } from './entities/sale-item.entity';
@@ -18,13 +20,8 @@ export class SalesService {
   constructor(
     @InjectRepository(Sale)
     private readonly salesRepository: Repository<Sale>,
-    @InjectRepository(SaleItem)
-    private readonly saleItemsRepository: Repository<SaleItem>,
-    @InjectRepository(Product)
-    private readonly productsRepository: Repository<Product>,
-    @InjectRepository(CashSession)
-    private readonly cashSessionsRepository: Repository<CashSession>,
     private readonly dataSource: DataSource,
+    private readonly nubefactService: NubefactService,
   ) {}
 
   findAll() {
@@ -47,10 +44,10 @@ export class SalesService {
   }
 
   async create(dto: CreateSaleDto, cashierId: string) {
-    return this.dataSource.transaction(async (manager) => {
+    const sale = await this.dataSource.transaction(async (manager) => {
       if (dto.cashSessionId) {
         const session = await manager.findOne(CashSession, {
-          where: { id: dto.cashSessionId },
+          where: { id: dto.cashSessionId, cashierId },
         });
         if (!session || session.status !== CashSessionStatus.OPEN) {
           throw new BadRequestException('La caja no está abierta');
@@ -58,7 +55,7 @@ export class SalesService {
       }
 
       const saleItems: SaleItem[] = [];
-      let subtotal = 0;
+      let total = 0;
 
       for (const item of dto.items) {
         const product = await manager.findOne(Product, {
@@ -76,8 +73,8 @@ export class SalesService {
           );
         }
         const unitPrice = Number(product.price);
-        const lineSubtotal = unitPrice * item.quantity;
-        subtotal += lineSubtotal;
+        const lineTotal = Number((unitPrice * item.quantity).toFixed(2));
+        total += lineTotal;
         product.stock -= item.quantity;
         await manager.save(product);
         saleItems.push(
@@ -85,28 +82,54 @@ export class SalesService {
             productId: product.id,
             quantity: item.quantity,
             unitPrice,
-            subtotal: lineSubtotal,
+            subtotal: lineTotal,
           }),
         );
       }
 
-      const tax = Number((subtotal * 0.18).toFixed(2));
-      const total = Number((subtotal + tax).toFixed(2));
+      total = Number(total.toFixed(2));
+      const subtotal = Number((total / 1.18).toFixed(2));
+      const tax = Number((total - subtotal).toFixed(2));
       const ticketNumber = `T-${Date.now()}`;
 
-      const sale = manager.create(Sale, {
-        ticketNumber,
-        cashierId,
-        cashSessionId: dto.cashSessionId ?? null,
-        subtotal,
-        tax,
-        total,
-        paymentMethod: dto.paymentMethod,
-        status: SaleStatus.COMPLETED,
-        items: saleItems,
-      });
+      const sale = await manager.save(
+        manager.create(Sale, {
+          ticketNumber,
+          cashierId,
+          cashSessionId: dto.cashSessionId ?? null,
+          subtotal,
+          tax,
+          total,
+          paymentMethod: dto.paymentMethod ?? PaymentMethod.CASH,
+          status: SaleStatus.COMPLETED,
+        }),
+      );
 
-      return manager.save(sale);
+      await manager.save(
+        saleItems.map((item) =>
+          manager.create(SaleItem, {
+            ...item,
+            saleId: sale.id,
+          }),
+        ),
+      );
+
+      return manager.findOneOrFail(Sale, {
+        where: { id: sale.id },
+        relations: { items: { product: true }, cashier: true },
+      });
     });
+
+    if (this.nubefactService.isEnabled() && this.nubefactService.shouldAutoSend()) {
+      const result = await this.nubefactService.emitBoleta(sale);
+      sale.nubefactStatus = result.status;
+      sale.nubefactResponse = result.response ? { ...result.response } : null;
+      sale.nubefactPdfUrl = result.response?.enlace_del_pdf ?? result.response?.enlace ?? null;
+      sale.nubefactXmlUrl = result.response?.enlace_del_xml ?? null;
+      sale.nubefactCdrUrl = result.response?.enlace_del_cdr ?? null;
+      return this.salesRepository.save(sale);
+    }
+
+    return sale;
   }
 }

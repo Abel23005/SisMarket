@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AssistantModule } from './assistant/assistant.module';
 import { AppCacheModule } from './cache/cache.module';
 import { AuthModule } from './auth/auth.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module';
       }),
     }),
     AppCacheModule,
+    AssistantModule,
     DatabaseModule,
     AuthModule,
     UsersModule,
