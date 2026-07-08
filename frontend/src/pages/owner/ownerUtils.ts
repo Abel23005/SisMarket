@@ -1,5 +1,23 @@
 import type { Product, Sale } from './types';
 
+const APP_TIME_ZONE = 'America/Lima';
+
+function parseApiDate(value: string) {
+  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/.test(value);
+  return new Date(hasTimezone ? value : `${value}Z`);
+}
+
+function dateKey(value: Date | string) {
+  const date = typeof value === 'string' ? parseApiDate(value) : value;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+
 export function getLowStockFromProducts(products: Product[]) {
   return products
     .filter((product) => product.stock <= (product.minStock ?? 5))
@@ -7,35 +25,30 @@ export function getLowStockFromProducts(products: Product[]) {
 }
 
 export function isTodaySale(sale: Sale) {
-  const createdAt = new Date(sale.createdAt);
-  const now = new Date();
-  return (
-    createdAt.getFullYear() === now.getFullYear() &&
-    createdAt.getMonth() === now.getMonth() &&
-    createdAt.getDate() === now.getDate()
-  );
+  return dateKey(sale.createdAt) === dateKey(new Date());
 }
 
 export function buildWeeklySales(sales: Sale[]) {
   const labels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
   const now = new Date();
-  const dayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
-  const monday = new Date(now);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(now.getDate() - dayIndex);
+  const limaNow = new Date(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: APP_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now),
+  );
+  const dayIndex = limaNow.getDay() === 0 ? 6 : limaNow.getDay() - 1;
+  const monday = new Date(limaNow);
+  monday.setDate(limaNow.getDate() - dayIndex);
 
   return labels.map((day, index) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + index);
+    const key = dateKey(date);
     const value = sales
-      .filter((sale) => {
-        const createdAt = new Date(sale.createdAt);
-        return (
-          createdAt.getFullYear() === date.getFullYear() &&
-          createdAt.getMonth() === date.getMonth() &&
-          createdAt.getDate() === date.getDate()
-        );
-      })
+      .filter((sale) => dateKey(sale.createdAt) === key)
       .reduce((sum, sale) => sum + Number(sale.total), 0);
 
     return { day, value };
@@ -58,11 +71,35 @@ export function countSaleItems(sale: Sale) {
   return (sale.items ?? []).reduce((sum, item) => sum + item.quantity, 0);
 }
 
-export function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString('es-PE', {
+export function formatTime(value: string | Date) {
+  const date = typeof value === 'string' ? parseApiDate(value) : value;
+  return new Intl.DateTimeFormat('es-PE', {
+    timeZone: APP_TIME_ZONE,
     hour: '2-digit',
     minute: '2-digit',
-  });
+  }).format(date);
+}
+
+export function formatDate(value: string | Date) {
+  const date = typeof value === 'string' ? parseApiDate(value) : value;
+  return new Intl.DateTimeFormat('es-PE', {
+    timeZone: APP_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
+}
+
+export function formatDateTime(value: string | Date) {
+  const date = typeof value === 'string' ? parseApiDate(value) : value;
+  return new Intl.DateTimeFormat('es-PE', {
+    timeZone: APP_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 export function toNumber(value: string) {

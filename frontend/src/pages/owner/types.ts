@@ -22,11 +22,17 @@ export interface SaleItem {
 export interface Sale {
   id: string;
   ticketNumber: string;
+  subtotal?: string | number;
+  tax?: string | number;
   total: string | number;
   paymentMethod?: string;
   status: string;
   items?: SaleItem[];
   createdAt: string;
+  nubefactStatus?: string | null;
+  nubefactPdfUrl?: string | null;
+  nubefactXmlUrl?: string | null;
+  nubefactCdrUrl?: string | null;
 }
 
 export interface CashSession {

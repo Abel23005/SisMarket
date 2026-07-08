@@ -25,6 +25,7 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -32,6 +33,7 @@ import {
   type ReactNode,
 } from 'react';
 import api from '../../lib/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import {
   getOwnerSectionSubtitle,
   getOwnerSectionTitle,
@@ -43,6 +45,8 @@ import {
   countSaleItems,
   exportProducts,
   formatCurrency,
+  formatDate,
+  formatDateTime,
   formatMoney,
   formatTime,
   getCategoryDistribution,
@@ -596,12 +600,13 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [lastSale, setLastSale] = useState<Sale | null>(null);
 
   const filteredProducts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return products
       .filter((product) => product.stock > 0)
-      .filter((product) => !normalizedQuery || [product.name, product.category ?? '', product.sku].join(' ').toLowerCase().includes(normalizedQuery));
+      .filter((product) => !normalizedQuery || [product.name, product.category ?? '', product.sku, product.barcode ?? ''].join(' ').toLowerCase().includes(normalizedQuery));
   }, [products, query]);
   const subtotal = cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
   const tax = subtotal * 0.18;
@@ -610,6 +615,7 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
   function addToCart(product: Product) {
     setMessage('');
     setError('');
+    setLastSale(null);
     setCart((current) => {
       const existing = current.find((item) => item.product.id === product.id);
       if (existing) {
@@ -620,7 +626,14 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
   }
 
   function updateCartQuantity(productId: string, quantity: number) {
-    setCart((current) => current.map((item) => item.product.id === productId ? { ...item, quantity: Math.min(Math.max(quantity, 1), item.product.stock) } : item).filter((item) => item.quantity > 0));
+    setCart((current) => current.map((item) => item.product.id === productId ? { ...item, quantity: Math.min(Math.max(quantity, 0), item.product.stock) } : item).filter((item) => item.quantity > 0));
+  }
+
+  function startNewSale() {
+    setCart([]);
+    setMessage('');
+    setError('');
+    setLastSale(null);
   }
 
   async function registerSale() {
@@ -631,28 +644,30 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
     setSaving(true);
     setError('');
     setMessage('');
+    setLastSale(null);
     try {
-      await api.post('/sales', {
+      const { data } = await api.post<Sale>('/sales', {
         paymentMethod,
         items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
       });
       setCart([]);
-      setMessage('Venta registrada correctamente.');
+      setLastSale(data);
+      setMessage('Venta registrada correctamente. Boleta generada.');
       await Promise.resolve(onSaleCreated());
-    } catch {
-      setError('No se pudo registrar la venta. Revisa stock o permisos.');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo registrar la venta. Revisa stock o permisos.'));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(360px,0.95fr)]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(390px,0.95fr)]">
       <section className="space-y-4">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar productos por nombre..." className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-slate-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar productos por nombre, SKU o codigo..." className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-slate-400" />
           </div>
         </div>
         {loading ? <p className="text-sm text-slate-500">Cargando productos...</p> : (
@@ -664,7 +679,7 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
                     <p className="font-bold">{product.name}</p>
                     <p className="mt-1 text-xs text-slate-500">{product.category ?? 'Sin categoria'}</p>
                   </div>
-                  <span className="text-xs text-slate-500">Stock: {product.stock}</span>
+                  <span className={`rounded-md px-2 py-1 text-xs ${product.stock <= (product.minStock ?? 5) ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>Stock: {product.stock}</span>
                 </div>
                 <p className="mt-4 text-lg font-bold">{formatMoney(product.price)}</p>
               </button>
@@ -672,49 +687,112 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
           </div>
         )}
       </section>
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-bold">Registro de venta</h3>
-        {cart.length === 0 ? (
-          <div className="flex min-h-[220px] flex-col items-center justify-center text-center text-sm text-slate-500">
-            <Receipt className="mb-3 h-12 w-12 text-slate-300" />
-            No hay productos agregados
-          </div>
-        ) : (
-          <div className="mt-5 space-y-4">
-            {cart.map((item) => (
-              <div key={item.product.id} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">{item.product.name}</p>
-                  <p className="text-sm text-slate-500">{formatMoney(item.product.price)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)} className="h-8 w-8 rounded-lg border border-slate-200">-</button>
-                  <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                  <button type="button" onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)} className="h-8 w-8 rounded-lg border border-slate-200">+</button>
-                </div>
-              </div>
-            ))}
-            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none">
-              <option value="efectivo">Efectivo</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="yape">Yape</option>
-              <option value="plin">Plin</option>
-            </select>
-            <div className="space-y-2 rounded-lg bg-slate-50 p-4 text-sm">
-              <div className="flex justify-between"><span>Subtotal</span><strong>{formatMoney(subtotal)}</strong></div>
-              <div className="flex justify-between"><span>IGV</span><strong>{formatMoney(tax)}</strong></div>
-              <div className="flex justify-between text-lg"><span>Total</span><strong>{formatMoney(total)}</strong></div>
+      <section className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-bold">Registro de venta</h3>
+              <p className="mt-1 text-xs text-slate-500">Selecciona productos y emite boleta</p>
             </div>
-            {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-            {message && <p className="text-sm font-medium text-green-600">{message}</p>}
-            <button type="button" onClick={registerSale} disabled={saving} className="h-11 w-full rounded-lg bg-neutral-950 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Registrando...' : 'Registrar venta'}</button>
+            {lastSale && <span className="rounded-md bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">Emitida</span>}
           </div>
-        )}
+          {cart.length === 0 ? (
+            <div className="flex min-h-[180px] flex-col items-center justify-center text-center text-sm text-slate-500">
+              <Receipt className="mb-3 h-12 w-12 text-slate-300" />
+              {lastSale ? 'Boleta generada. Puedes iniciar una nueva venta.' : 'No hay productos agregados'}
+            </div>
+          ) : (
+            <div className="mt-5 space-y-4">
+              {cart.map((item) => (
+                <div key={item.product.id} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{item.product.name}</p>
+                    <p className="text-sm text-slate-500">{formatMoney(item.product.price)} x {item.quantity}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)} className="h-8 w-8 rounded-lg border border-slate-200">-</button>
+                    <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                    <button type="button" onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)} className="h-8 w-8 rounded-lg border border-slate-200">+</button>
+                  </div>
+                </div>
+              ))}
+              <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none">
+                <option value="efectivo">Efectivo</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="yape">Yape</option>
+                <option value="plin">Plin</option>
+              </select>
+              <div className="space-y-2 rounded-lg bg-slate-50 p-4 text-sm">
+                <div className="flex justify-between"><span>Op. gravada</span><strong>{formatMoney(subtotal)}</strong></div>
+                <div className="flex justify-between"><span>IGV incluido 18%</span><strong>{formatMoney(tax)}</strong></div>
+                <div className="flex justify-between text-lg"><span>Total</span><strong>{formatMoney(total)}</strong></div>
+              </div>
+              {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{error}</p>}
+              {message && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">{message}</p>}
+              <button type="button" onClick={registerSale} disabled={saving} className="h-11 w-full rounded-lg bg-neutral-950 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Registrando...' : 'Registrar venta y generar boleta'}</button>
+            </div>
+          )}
+          {lastSale && <button type="button" onClick={startNewSale} className="mt-4 h-10 w-full rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">Nueva venta</button>}
+        </div>
+        {lastSale && <ElectronicReceipt sale={lastSale} />}
       </section>
     </div>
   );
 }
 
+function ElectronicReceipt({ sale }: { sale: Sale }) {
+  const subtotal = Number(sale.subtotal ?? 0);
+  const tax = Number(sale.tax ?? 0);
+  const total = Number(sale.total ?? 0);
+  const receiptNumber = sale.ticketNumber.replace(/^T-/, 'B001-');
+  return (
+    <article className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <div id="electronic-receipt" className="rounded-lg border border-slate-300 bg-white p-5 text-sm text-slate-950">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+          <div>
+            <h3 className="text-xl font-bold">SisMarket</h3>
+            <p className="mt-1 text-xs text-slate-500">RUC 20612345678</p>
+            <p className="text-xs text-slate-500">Av. Los Alamos 456, Lima</p>
+          </div>
+          <div className="rounded-lg border border-slate-300 px-4 py-3 text-center">
+            <p className="text-xs font-semibold uppercase text-slate-500">Boleta electronica</p>
+            <p className="mt-1 font-bold">{receiptNumber}</p>
+          </div>
+        </div>
+        <div className="grid gap-2 border-b border-slate-200 py-4 text-xs sm:grid-cols-2">
+          <p><span className="font-semibold">Fecha:</span> {formatDateTime(sale.createdAt)}</p>
+          <p><span className="font-semibold">Pago:</span> {getPaymentMethodLabel(sale.paymentMethod)}</p>
+          <p><span className="font-semibold">Cliente:</span> Consumidor final</p>
+          <p><span className="font-semibold">Estado Nubefact:</span> {sale.nubefactStatus === 'accepted' ? 'Aceptado' : sale.nubefactStatus === 'rejected' ? 'Rechazado' : 'Pendiente'}</p>
+        </div>
+        <div className="py-4">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-slate-200 text-slate-500">
+              <tr><th className="py-2">Producto</th><th className="py-2 text-center">Cant.</th><th className="py-2 text-right">Importe</th></tr>
+            </thead>
+            <tbody>
+              {(sale.items ?? []).map((item) => (
+                <tr key={item.id} className="border-b border-slate-100">
+                  <td className="py-2 font-medium">{item.product?.name ?? item.productId}</td>
+                  <td className="py-2 text-center">{item.quantity}</td>
+                  <td className="py-2 text-right">{formatMoney(item.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="ml-auto w-full max-w-[240px] space-y-2 border-t border-slate-200 pt-4 text-sm">
+          <div className="flex justify-between"><span>Op. gravada</span><strong>{formatMoney(subtotal)}</strong></div>
+          <div className="flex justify-between"><span>IGV incluido 18%</span><strong>{formatMoney(tax)}</strong></div>
+          <div className="flex justify-between text-lg"><span>Total</span><strong>{formatMoney(total)}</strong></div>
+        </div>
+        {sale.nubefactPdfUrl && <a href={sale.nubefactPdfUrl} target="_blank" rel="noreferrer" className="mt-5 block rounded-lg bg-green-50 p-3 text-center text-xs font-semibold text-green-700">Ver PDF emitido por Nubefact</a>}
+        {!sale.nubefactPdfUrl && <p className="mt-5 rounded-lg bg-slate-50 p-3 text-center text-xs text-slate-500">Representacion impresa de boleta electronica. Envio Nubefact pendiente.</p>}
+      </div>
+      <button type="button" onClick={() => window.print()} className="mt-4 h-10 w-full rounded-lg bg-neutral-950 text-sm font-semibold text-white">Imprimir boleta</button>
+    </article>
+  );
+}
 function SalesView({ sales, loading, onNewSale }: { sales: Sale[]; loading: boolean; onNewSale: () => void }) {
   const [query, setQuery] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
@@ -770,7 +848,7 @@ function SalesView({ sales, loading, onNewSale }: { sales: Sale[]; loading: bool
           {selectedSale ? (
             <div>
               <h3 className="text-xl font-bold">{selectedSale.ticketNumber}</h3>
-              <p className="mt-1 text-sm text-slate-500">{new Date(selectedSale.createdAt).toLocaleString('es-PE')}</p>
+              <p className="mt-1 text-sm text-slate-500">{formatDateTime(selectedSale.createdAt)}</p>
               <div className="mt-6 space-y-3">
                 {(selectedSale.items ?? []).map((item) => (
                   <div key={item.id} className="flex justify-between gap-4 border-b border-slate-100 pb-3 text-sm">
@@ -801,6 +879,13 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
   const [savingCash, setSavingCash] = useState(false);
   const [cashMessage, setCashMessage] = useState('');
   const [cashError, setCashError] = useState('');
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const activeSession = cashSessions.find(isOpenCashSession) ?? null;
   const displayedSession = activeSession ?? cashSessions[0] ?? null;
   const todayTotal = sales.filter(isTodaySale).reduce((sum, sale) => sum + Number(sale.total), 0);
@@ -854,7 +939,8 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
           <div className="flex items-start gap-4"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700"><Wallet className="h-5 w-5" /></span><div><p className="font-bold text-green-900">{activeSession ? 'Turno activo' : 'Ultimo turno'}</p><p className="text-sm text-green-800">Caja principal</p></div></div>
           <button type="button" onClick={closeTurn} disabled={savingCash || !activeSession} className="w-fit rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Cerrar turno</button>
         </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-4">
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <CashSummary label="Hora actual" value={formatTime(currentTime)} />
           <CashSummary label="Hora inicio" value={displayedSession ? formatTime(displayedSession.openedAt) : '--:--'} />
           <CashSummary label="Saldo inicial" value={formatMoney(openingAmount)} />
           <CashSummary label="Ventas" value={formatMoney(todayTotal)} />
@@ -869,7 +955,7 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Cajero</th><th className="px-5 py-3 font-medium">Fecha</th><th className="px-5 py-3 font-medium">Horario</th><th className="px-5 py-3 font-medium">Ventas</th><th className="px-5 py-3 font-medium">Saldo final</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead>
               <tbody>
-                {cashSessions.map((session) => <tr key={session.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">Caja</td><td className="px-5 py-4">{new Date(session.openedAt).toLocaleDateString('es-PE')}</td><td className="px-5 py-4">{formatTime(session.openedAt)} - {session.closedAt ? formatTime(session.closedAt) : 'Activo'}</td><td className="px-5 py-4">{formatMoney(todayTotal)}</td><td className="px-5 py-4">{session.expectedAmount ? formatMoney(session.expectedAmount) : '--'}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${isOpenCashSession(session) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{getCashSessionLabel(session)}</span></td></tr>)}
+                {cashSessions.map((session) => <tr key={session.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">Caja</td><td className="px-5 py-4">{formatDate(session.openedAt)}</td><td className="px-5 py-4">{formatTime(session.openedAt)} - {session.closedAt ? formatTime(session.closedAt) : 'Activo'}</td><td className="px-5 py-4">{formatMoney(todayTotal)}</td><td className="px-5 py-4">{session.expectedAmount ? formatMoney(session.expectedAmount) : '--'}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${isOpenCashSession(session) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{getCashSessionLabel(session)}</span></td></tr>)}
                 {cashSessions.length === 0 && <tr><td className="px-5 py-8 text-slate-500" colSpan={6}>No hay turnos registrados.</td></tr>}
               </tbody>
             </table>
@@ -962,17 +1048,27 @@ function CategoryReport({ rows }: { rows: { name: string; percent: number }[] })
 function AssistantView({ products, sales }: { products: Product[]; sales: Sale[] }) {
   const [messages, setMessages] = useState<ChatMessage[]>([{ id: 'welcome', sender: 'assistant', text: 'Hola! Soy tu asistente inteligente. Puedo ayudarte a consultar informacion sobre tu minimarket. Que te gustaria saber?', time: '11:03 a. m.' }]);
   const [question, setQuestion] = useState('');
+  const [sending, setSending] = useState(false);
   const suggestions = ['Cuanto llevo vendido hoy?', 'Que productos tienen stock bajo?', 'Cuales son los mas vendidos?', 'Dame un resumen del negocio'];
-  function sendQuestion(value = question) {
+  async function sendQuestion(value = question) {
     const trimmed = value.trim();
-    if (!trimmed) return;
-    const time = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-    setMessages((current) => [...current, { id: `${Date.now()}-u`, sender: 'user', text: trimmed, time }, { id: `${Date.now()}-a`, sender: 'assistant', text: buildAssistantAnswer(trimmed, products, sales), time }]);
+    if (!trimmed || sending) return;
+    const time = formatTime(new Date());
+    const pendingId = `${Date.now()}-pending`;
     setQuestion('');
+    setSending(true);
+    setMessages((current) => [...current, { id: `${Date.now()}-u`, sender: 'user', text: trimmed, time }, { id: pendingId, sender: 'assistant', text: 'Analizando tus datos...', time }]);
+    try {
+      const { data } = await api.post<{ answer: string }>('/assistant/chat', { message: trimmed });
+      setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, text: data.answer || buildAssistantAnswer(trimmed, products, sales) } : message));
+    } catch {
+      setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, text: `${buildAssistantAnswer(trimmed, products, sales)}\n\nNota: Gemini no esta disponible ahora mismo, use el analisis local.` } : message));
+    } finally {
+      setSending(false);
+    }
   }
-  return <section className="mx-auto flex h-[calc(100vh-150px)] max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"><div className="flex-1 space-y-4 overflow-y-auto p-6">{messages.map((message) => <div key={message.id} className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>{message.sender === 'assistant' && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white"><Bot className="h-4 w-4" /></span>}<div className={`max-w-[680px] rounded-2xl px-5 py-4 text-sm ${message.sender === 'user' ? 'bg-neutral-950 text-white' : 'bg-slate-100 text-slate-950'}`}><p>{message.text}</p><p className="mt-2 text-xs text-slate-500">{message.time}</p></div></div>)}</div><div className="border-t border-slate-100 p-4"><div className="mb-3 flex flex-wrap gap-2">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => sendQuestion(suggestion)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{suggestion}</button>)}</div><div className="flex gap-2"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') sendQuestion(); }} placeholder="Escribe tu pregunta..." className="h-11 flex-1 rounded-lg border border-slate-200 px-4 text-sm outline-none focus:border-slate-400" /><button type="button" onClick={() => sendQuestion()} className="flex h-11 w-12 items-center justify-center rounded-lg bg-neutral-500 text-white hover:bg-neutral-700"><MessageCircle className="h-5 w-5" /></button></div></div></section>;
+  return <section className="mx-auto flex h-[calc(100vh-150px)] max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"><div className="flex-1 space-y-4 overflow-y-auto p-6">{messages.map((message) => <div key={message.id} className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>{message.sender === 'assistant' && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white"><Bot className="h-4 w-4" /></span>}<div className={`max-w-[680px] whitespace-pre-line rounded-2xl px-5 py-4 text-sm ${message.sender === 'user' ? 'bg-neutral-950 text-white' : 'bg-slate-100 text-slate-950'}`}><p>{message.text}</p><p className="mt-2 text-xs text-slate-500">{message.time}</p></div></div>)}</div><div className="border-t border-slate-100 p-4"><div className="mb-3 flex flex-wrap gap-2">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => sendQuestion(suggestion)} disabled={sending} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{suggestion}</button>)}</div><div className="flex gap-2"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') sendQuestion(); }} disabled={sending} placeholder="Escribe tu pregunta..." className="h-11 flex-1 rounded-lg border border-slate-200 px-4 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50" /><button type="button" onClick={() => sendQuestion()} disabled={sending} className="flex h-11 w-12 items-center justify-center rounded-lg bg-neutral-500 text-white hover:bg-neutral-700 disabled:opacity-60"><MessageCircle className="h-5 w-5" /></button></div></div></section>;
 }
-
 function buildAssistantAnswer(question: string, products: Product[], sales: Sale[]) {
   const normalized = question.toLowerCase();
   const todaySales = sales.filter(isTodaySale);
