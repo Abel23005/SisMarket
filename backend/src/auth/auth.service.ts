@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { UserRole } from '../common/enums/user-role.enum';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -39,7 +40,8 @@ export class AuthService {
       username,
       email: dto.email.trim().toLowerCase(),
       fullName: dto.fullName.trim(),
-      role: dto.role,
+      // Public self-registration must never grant elevated permissions.
+      role: UserRole.CASHIER,
       passwordHash,
     });
     return this.buildAuthResponse(user);

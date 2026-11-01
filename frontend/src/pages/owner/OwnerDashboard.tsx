@@ -39,7 +39,7 @@ import {
   getOwnerSectionTitle,
   type OwnerSection,
 } from './ownerNavigation';
-import type { CashSession, Product, Sale, SystemUser } from './types';
+import type { CashSession, Product, Sale, Supplier, SystemUser } from './types';
 import {
   buildWeeklySales,
   countSaleItems,
@@ -68,6 +68,16 @@ interface ProductFormState {
   minStock: string;
   category: string;
   imageUrl: string;
+  supplierId: string;
+}
+
+interface SupplierFormState {
+  name: string;
+  contact: string;
+  email: string;
+  phone: string;
+  lastOrder: string;
+  monthlyTotal: string;
 }
 
 interface CartItem {
@@ -93,15 +103,17 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
   minStock: '5',
   category: '',
   imageUrl: '',
+  supplierId: '',
 };
 
-const PROVIDERS = [
-  { name: 'Alicorp S.A.', contact: 'Roberto Sanchez', email: 'ventas@alicorp.com.pe', phone: '+51 987 654 321', total: 2450.8, lastOrder: '2026-04-10' },
-  { name: 'Gloria S.A.', contact: 'Patricia Vega', email: 'pedidos@gloria.com.pe', phone: '+51 987 123 456', total: 1890.5, lastOrder: '2026-04-11' },
-  { name: 'AJE Group', contact: 'Miguel Flores', email: 'distribucion@ajegroup.com', phone: '+51 999 888 777', total: 1250, lastOrder: '2026-04-09' },
-  { name: 'Kimberly Clark Peru', contact: 'Sofia Ramirez', email: 'clientes@kimberly.pe', phone: '+51 988 777 666', total: 985.4, lastOrder: '2026-04-08' },
-  { name: 'Procter & Gamble Peru', contact: 'Carlos Mendoza', email: 'ventas@pg.com.pe', phone: '+51 987 555 444', total: 1560.2, lastOrder: '2026-04-07' },
-];
+const EMPTY_SUPPLIER_FORM: SupplierFormState = {
+  name: '',
+  contact: '',
+  email: '',
+  phone: '',
+  lastOrder: '',
+  monthlyTotal: '0',
+};
 
 function isOpenCashSession(session: CashSession) {
   return ['abierta', 'open'].includes(session.status);
@@ -128,8 +140,11 @@ export default function OwnerDashboard({
   sales,
   cashSessions,
   systemUsers,
+  suppliers,
   loading,
+  loadWarning,
   onProductsChanged,
+  onDataChanged,
   onLogout,
 }: {
   fullName: string;
@@ -138,14 +153,17 @@ export default function OwnerDashboard({
   sales: Sale[];
   cashSessions: CashSession[];
   systemUsers: SystemUser[];
+  suppliers: Supplier[];
   loading: boolean;
+  loadWarning: string;
   onProductsChanged: () => Promise<void> | void;
+  onDataChanged: () => Promise<void> | void;
   onLogout: () => void;
 }) {
   const [activeSection, setActiveSection] = useState<OwnerSection>('dashboard');
 
   return (
-    <div className="min-h-screen bg-[#f7f7f8] text-slate-950 lg:grid lg:grid-cols-[320px_1fr]">
+    <div className="min-h-screen min-w-0 bg-[#f7f7f8] text-slate-950 lg:grid lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:border-b-0 lg:border-r">
         <div className="px-6 py-8">
           <h1 className="text-3xl font-bold tracking-normal">SisMarket</h1>
@@ -174,7 +192,7 @@ export default function OwnerDashboard({
         </div>
       </aside>
 
-      <main className="px-5 py-6 sm:px-8 lg:px-10 lg:py-7">
+      <main className="min-w-0 px-4 py-5 sm:px-8 lg:px-10 lg:py-7">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-3xl font-bold tracking-normal">{getOwnerSectionTitle(activeSection)}</h2>
@@ -186,15 +204,17 @@ export default function OwnerDashboard({
           </button>
         </div>
 
+        {loadWarning && <div role="alert" className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"><p>{loadWarning}</p><button type="button" onClick={() => void onDataChanged()} className="h-10 shrink-0 rounded-lg border border-amber-300 bg-white px-4 font-semibold hover:bg-amber-100">Actualizar</button></div>}
+
         {activeSection === 'dashboard' && <DashboardView products={products} lowStockProducts={lowStockProducts} sales={sales} cashSessions={cashSessions} loading={loading} />}
-        {activeSection === 'inventory' && <InventoryView products={products} lowStockProducts={lowStockProducts} loading={loading} onProductsChanged={onProductsChanged} />}
-        {activeSection === 'pos' && <PointOfSaleView products={products} loading={loading} onSaleCreated={onProductsChanged} />}
+        {activeSection === 'inventory' && <InventoryView products={products} suppliers={suppliers} lowStockProducts={lowStockProducts} loading={loading} onProductsChanged={onProductsChanged} />}
+        {activeSection === 'pos' && <PointOfSaleView products={products} cashSessions={cashSessions} loading={loading} onSaleCreated={onProductsChanged} />}
         {activeSection === 'sales' && <SalesView sales={sales} loading={loading} onNewSale={() => setActiveSection('pos')} />}
         {activeSection === 'cash' && <CashView cashSessions={cashSessions} sales={sales} onCashChanged={onProductsChanged} />}
-        {activeSection === 'providers' && <ProvidersView products={products} />}
+        {activeSection === 'providers' && <ProvidersView products={products} suppliers={suppliers} onSuppliersChanged={onDataChanged} />}
         {activeSection === 'reports' && <ReportsView products={products} sales={sales} />}
         {activeSection === 'assistant' && <AssistantView products={products} sales={sales} />}
-        {activeSection === 'settings' && <SettingsView fullName={fullName} systemUsers={systemUsers} />}
+        {activeSection === 'settings' && <SettingsView fullName={fullName} systemUsers={systemUsers} onUsersChanged={onDataChanged} />}
       </main>
     </div>
   );
@@ -361,7 +381,7 @@ function LowStockRow({ name, stock, minStock }: { name: string; stock: number; m
   );
 }
 
-function InventoryView({ products, lowStockProducts, loading, onProductsChanged }: { products: Product[]; lowStockProducts: Product[]; loading: boolean; onProductsChanged: () => Promise<void> | void }) {
+function InventoryView({ products, suppliers, lowStockProducts, loading, onProductsChanged }: { products: Product[]; suppliers: Supplier[]; lowStockProducts: Product[]; loading: boolean; onProductsChanged: () => Promise<void> | void }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todos');
   const [stockFilter, setStockFilter] = useState('Todos');
@@ -408,6 +428,7 @@ function InventoryView({ products, lowStockProducts, loading, onProductsChanged 
       minStock: String(product.minStock ?? 5),
       category: product.category ?? '',
       imageUrl: product.imageUrl ?? '',
+      supplierId: product.supplierId ?? product.supplier?.id ?? '',
     });
   }
 
@@ -426,6 +447,7 @@ function InventoryView({ products, lowStockProducts, loading, onProductsChanged 
       minStock: toNumber(form.minStock),
       category: optionalText(form.category),
       imageUrl: optionalText(form.imageUrl),
+      supplierId: form.supplierId || null,
     };
 
     if (!payload.name || !payload.sku) {
@@ -498,13 +520,14 @@ function InventoryView({ products, lowStockProducts, loading, onProductsChanged 
               <X className="h-4 w-4" />
             </button>
           </div>
-          <form onSubmit={saveProduct} className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_0.7fr_0.7fr_auto]">
+          <form onSubmit={saveProduct} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_0.7fr_0.7fr_1fr_auto]">
             <InventoryInput label="Nombre" value={form.name} onChange={(value) => updateField('name', value)} placeholder="Aceite Primor 1L" />
             <InventoryInput label="SKU" value={form.sku} onChange={(value) => updateField('sku', value)} placeholder="ACE-001" />
             <InventoryInput label="Categoria" value={form.category} onChange={(value) => updateField('category', value)} placeholder="Abarrotes" />
             <InventoryInput label="Precio" value={form.price} onChange={(value) => updateField('price', value)} placeholder="9.90" inputMode="decimal" />
             <InventoryInput label="Stock" value={form.stock} onChange={(value) => updateField('stock', value)} placeholder="45" inputMode="numeric" />
             <InventoryInput label="Minimo" value={form.minStock} onChange={(value) => updateField('minStock', value)} placeholder="5" inputMode="numeric" />
+            <label className="block text-sm font-medium text-slate-700">Proveedor<select value={form.supplierId} onChange={(event) => updateField('supplierId', event.target.value)} className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"><option value="">Sin proveedor</option>{suppliers.filter((supplier) => supplier.active).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
             <button type="submit" disabled={saving} className="mt-7 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white disabled:opacity-60">
               {saving ? 'Guardando' : 'Guardar'}
             </button>
@@ -538,7 +561,6 @@ function InventoryView({ products, lowStockProducts, loading, onProductsChanged 
                   <th className="px-6 py-3 font-medium">Categoria</th>
                   <th className="px-6 py-3 font-medium">Stock</th>
                   <th className="px-6 py-3 font-medium">Stock min.</th>
-                  <th className="px-6 py-3 font-medium">Costo</th>
                   <th className="px-6 py-3 font-medium">Precio venta</th>
                   <th className="px-6 py-3 font-medium">Proveedor</th>
                   <th className="px-6 py-3 font-medium">Estado</th>
@@ -557,7 +579,6 @@ function InventoryView({ products, lowStockProducts, loading, onProductsChanged 
                       <td className="px-6 py-4 text-slate-600"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs">{product.category ?? 'Sin categoria'}</span></td>
                       <td className="px-6 py-4 font-semibold">{product.stock}</td>
                       <td className="px-6 py-4 text-slate-600">{product.minStock ?? 5}</td>
-                      <td className="px-6 py-4">{formatMoney(Number(product.price) * 0.75)}</td>
                       <td className="px-6 py-4 font-semibold">{formatMoney(product.price)}</td>
                       <td className="px-6 py-4 text-slate-600">{getProductProvider(product)}</td>
                       <td className="px-6 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${status.className}`}>{status.label}</span></td>
@@ -593,7 +614,7 @@ function FilterGroup({ label, value, options, counts, onChange }: { label: strin
   );
 }
 
-function PointOfSaleView({ products, loading, onSaleCreated }: { products: Product[]; loading: boolean; onSaleCreated: () => Promise<void> | void }) {
+function PointOfSaleView({ products, cashSessions, loading, onSaleCreated }: { products: Product[]; cashSessions: CashSession[]; loading: boolean; onSaleCreated: () => Promise<void> | void }) {
   const [query, setQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState('efectivo');
@@ -608,9 +629,8 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
       .filter((product) => product.stock > 0)
       .filter((product) => !normalizedQuery || [product.name, product.category ?? '', product.sku, product.barcode ?? ''].join(' ').toLowerCase().includes(normalizedQuery));
   }, [products, query]);
-  const subtotal = cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
-  const tax = subtotal * 0.18;
-  const total = subtotal + tax;
+  const total = cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
+  const activeCashSession = cashSessions.find(isOpenCashSession) ?? null;
 
   function addToCart(product: Product) {
     setMessage('');
@@ -648,6 +668,7 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
     try {
       const { data } = await api.post<Sale>('/sales', {
         paymentMethod,
+        cashSessionId: activeCashSession?.id,
         items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
       });
       setCart([]);
@@ -722,9 +743,7 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
                 <option value="yape">Yape</option>
                 <option value="plin">Plin</option>
               </select>
-              <div className="space-y-2 rounded-lg bg-slate-50 p-4 text-sm">
-                <div className="flex justify-between"><span>Op. gravada</span><strong>{formatMoney(subtotal)}</strong></div>
-                <div className="flex justify-between"><span>IGV incluido 18%</span><strong>{formatMoney(tax)}</strong></div>
+              <div className="rounded-lg bg-slate-50 p-4 text-sm">
                 <div className="flex justify-between text-lg"><span>Total</span><strong>{formatMoney(total)}</strong></div>
               </div>
               {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{error}</p>}
@@ -741,8 +760,6 @@ function PointOfSaleView({ products, loading, onSaleCreated }: { products: Produ
 }
 
 function ElectronicReceipt({ sale }: { sale: Sale }) {
-  const subtotal = Number(sale.subtotal ?? 0);
-  const tax = Number(sale.tax ?? 0);
   const total = Number(sale.total ?? 0);
   const receiptNumber = sale.ticketNumber.replace(/^T-/, 'B001-');
   return (
@@ -781,11 +798,10 @@ function ElectronicReceipt({ sale }: { sale: Sale }) {
             </tbody>
           </table>
         </div>
-        <div className="ml-auto w-full max-w-[240px] space-y-2 border-t border-slate-200 pt-4 text-sm">
-          <div className="flex justify-between"><span>Op. gravada</span><strong>{formatMoney(subtotal)}</strong></div>
-          <div className="flex justify-between"><span>IGV incluido 18%</span><strong>{formatMoney(tax)}</strong></div>
+        <div className="ml-auto w-full max-w-[240px] border-t border-slate-200 pt-4 text-sm">
           <div className="flex justify-between text-lg"><span>Total</span><strong>{formatMoney(total)}</strong></div>
         </div>
+
         {sale.nubefactPdfUrl && <a href={sale.nubefactPdfUrl} target="_blank" rel="noreferrer" className="mt-5 block rounded-lg bg-green-50 p-3 text-center text-xs font-semibold text-green-700">Ver PDF emitido por Nubefact</a>}
         {!sale.nubefactPdfUrl && <p className="mt-5 rounded-lg bg-slate-50 p-3 text-center text-xs text-slate-500">Representacion impresa de boleta electronica. Envio Nubefact pendiente.</p>}
       </div>
@@ -888,10 +904,18 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
 
   const activeSession = cashSessions.find(isOpenCashSession) ?? null;
   const displayedSession = activeSession ?? cashSessions[0] ?? null;
-  const todayTotal = sales.filter(isTodaySale).reduce((sum, sale) => sum + Number(sale.total), 0);
+  const getSessionSales = (session: CashSession) => sales.filter((sale) => sale.cashSessionId === session.id);
+  const displayedSessionSales = displayedSession ? getSessionSales(displayedSession) : [];
+  const displayedSalesTotal = displayedSessionSales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const openingAmount = displayedSession ? Number(displayedSession.openingAmount) : 0;
-  const currentBalance = openingAmount + todayTotal;
-  const recentSales = sales.slice(0, 7);
+  const expectedBalance = displayedSession
+    ? isOpenCashSession(displayedSession)
+      ? openingAmount + displayedSalesTotal
+      : Number(displayedSession.expectedAmount ?? openingAmount + displayedSalesTotal)
+    : 0;
+  const countedBalance = displayedSession?.closingAmount != null ? Number(displayedSession.closingAmount) : null;
+  const balanceDifference = countedBalance == null ? null : countedBalance - expectedBalance;
+  const recentSales = displayedSession ? displayedSessionSales.slice(0, 7) : [];
 
   async function openTurn() {
     const value = window.prompt('Saldo inicial de caja', '200');
@@ -915,7 +939,7 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
       setCashError('No hay un turno activo para cerrar.');
       return;
     }
-    const value = window.prompt('Monto contado al cierre', String(currentBalance.toFixed(2)));
+    const value = window.prompt('Monto contado al cierre', String(expectedBalance.toFixed(2)));
     if (!value) return;
     setSavingCash(true);
     setCashMessage('');
@@ -939,24 +963,33 @@ function CashView({ cashSessions, sales, onCashChanged }: { cashSessions: CashSe
           <div className="flex items-start gap-4"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700"><Wallet className="h-5 w-5" /></span><div><p className="font-bold text-green-900">{activeSession ? 'Turno activo' : 'Ultimo turno'}</p><p className="text-sm text-green-800">Caja principal</p></div></div>
           <button type="button" onClick={closeTurn} disabled={savingCash || !activeSession} className="w-fit rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Cerrar turno</button>
         </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <CashSummary label="Hora actual" value={formatTime(currentTime)} />
           <CashSummary label="Hora inicio" value={displayedSession ? formatTime(displayedSession.openedAt) : '--:--'} />
           <CashSummary label="Saldo inicial" value={formatMoney(openingAmount)} />
-          <CashSummary label="Ventas" value={formatMoney(todayTotal)} />
-          <CashSummary label="Saldo actual" value={formatMoney(currentBalance)} />
+          <CashSummary label="Ventas del turno" value={formatMoney(displayedSalesTotal)} />
+          <CashSummary label="Saldo esperado" value={formatMoney(expectedBalance)} />
+          <CashSummary label={countedBalance == null ? 'Saldo actual' : 'Saldo contado'} value={formatMoney(countedBalance ?? expectedBalance)} />
         </div>
+        {balanceDifference != null && <p className={`mt-4 text-sm font-semibold ${Math.abs(balanceDifference) < 0.01 ? 'text-green-700' : 'text-orange-700'}`}>Diferencia de cierre: {formatMoney(balanceDifference)}</p>}
         {(cashMessage || cashError) && <p className={`mt-4 text-sm font-semibold ${cashError ? 'text-red-700' : 'text-green-700'}`}>{cashError || cashMessage}</p>}
       </section>
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-5"><h3 className="text-xl font-bold">Historial de turnos</h3></div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Cajero</th><th className="px-5 py-3 font-medium">Fecha</th><th className="px-5 py-3 font-medium">Horario</th><th className="px-5 py-3 font-medium">Ventas</th><th className="px-5 py-3 font-medium">Saldo final</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead>
+            <table className="w-full min-w-[1120px] text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Cajero</th><th className="px-5 py-3 font-medium">Fecha</th><th className="px-5 py-3 font-medium">Horario</th><th className="px-5 py-3 font-medium">Inicial</th><th className="px-5 py-3 font-medium">Ventas</th><th className="px-5 py-3 font-medium">Esperado</th><th className="px-5 py-3 font-medium">Contado</th><th className="px-5 py-3 font-medium">Dif.</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead>
               <tbody>
-                {cashSessions.map((session) => <tr key={session.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">Caja</td><td className="px-5 py-4">{formatDate(session.openedAt)}</td><td className="px-5 py-4">{formatTime(session.openedAt)} - {session.closedAt ? formatTime(session.closedAt) : 'Activo'}</td><td className="px-5 py-4">{formatMoney(todayTotal)}</td><td className="px-5 py-4">{session.expectedAmount ? formatMoney(session.expectedAmount) : '--'}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${isOpenCashSession(session) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{getCashSessionLabel(session)}</span></td></tr>)}
-                {cashSessions.length === 0 && <tr><td className="px-5 py-8 text-slate-500" colSpan={6}>No hay turnos registrados.</td></tr>}
+                {cashSessions.map((session) => {
+                  const sessionSalesTotal = getSessionSales(session).reduce((sum, sale) => sum + Number(sale.total), 0);
+                  const sessionOpening = Number(session.openingAmount);
+                  const sessionExpected = isOpenCashSession(session) ? sessionOpening + sessionSalesTotal : Number(session.expectedAmount ?? sessionOpening + sessionSalesTotal);
+                  const sessionCounted = session.closingAmount != null ? Number(session.closingAmount) : null;
+                  const sessionDifference = sessionCounted == null ? null : sessionCounted - sessionExpected;
+                  return <tr key={session.id} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">Caja</td><td className="px-5 py-4">{formatDate(session.openedAt)}</td><td className="px-5 py-4">{formatTime(session.openedAt)} - {session.closedAt ? formatTime(session.closedAt) : 'Activo'}</td><td className="px-5 py-4">{formatMoney(sessionOpening)}</td><td className="px-5 py-4">{formatMoney(sessionSalesTotal)}</td><td className="px-5 py-4 font-semibold">{formatMoney(sessionExpected)}</td><td className="px-5 py-4">{sessionCounted == null ? '--' : formatMoney(sessionCounted)}</td><td className={`px-5 py-4 font-semibold ${sessionDifference != null && Math.abs(sessionDifference) >= 0.01 ? 'text-orange-600' : 'text-slate-700'}`}>{sessionDifference == null ? '--' : formatMoney(sessionDifference)}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${isOpenCashSession(session) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{getCashSessionLabel(session)}</span></td></tr>;
+                })}
+                {cashSessions.length === 0 && <tr><td className="px-5 py-8 text-slate-500" colSpan={9}>No hay turnos registrados.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -977,31 +1010,103 @@ function CashSummary({ label, value }: { label: string; value: string }) {
   return <div><p className="text-sm text-green-700">{label}</p><p className="mt-2 text-lg font-bold text-green-950">{value}</p></div>;
 }
 
-function ProvidersView({ products }: { products: Product[] }) {
+function ProvidersView({ products, suppliers, onSuppliersChanged }: { products: Product[]; suppliers: Supplier[]; onSuppliersChanged: () => Promise<void> | void }) {
   const [query, setQuery] = useState('');
+  const [productQuery, setProductQuery] = useState('');
+  const [productCategory, setProductCategory] = useState('Todas');
+  const [productStock, setProductStock] = useState('Todos');
+  const [productSupplier, setProductSupplier] = useState('Todos');
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const filteredProviders = PROVIDERS.filter((provider) => [provider.name, provider.contact, provider.email].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
-  const selected = PROVIDERS.find((provider) => provider.name === selectedProvider);
-  const recentOrders = PROVIDERS.slice(0, 4);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState<SupplierFormState>(EMPTY_SUPPLIER_FORM);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const providerRows = suppliers;
+  const filteredProviders = providerRows.filter((provider) => [provider.name, provider.contact, provider.email ?? '', provider.phone ?? ''].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
+  const selected = providerRows.find((provider) => provider.id === selectedProvider);
+  const productCategories = Array.from(new Set(products.map((product) => product.category).filter((category): category is string => Boolean(category)))).sort((a, b) => a.localeCompare(b, 'es'));
+  const filteredProducts = products.filter((product) => {
+    const matchesQuery = [product.name, product.sku, product.barcode ?? '', product.category ?? ''].join(' ').toLowerCase().includes(productQuery.trim().toLowerCase());
+    const matchesCategory = productCategory === 'Todas' || product.category === productCategory;
+    const matchesStock = productStock === 'Todos' || (productStock === 'Bajo' ? product.stock <= (product.minStock ?? 5) : product.stock > (product.minStock ?? 5));
+    const matchesSupplier = productSupplier === 'Todos' || (product.supplierId ?? product.supplier?.id ?? '') === productSupplier;
+    return matchesQuery && matchesCategory && matchesStock && matchesSupplier;
+  });
+
+  async function createSupplier(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      await api.post<Supplier>('/suppliers', {
+        name: form.name.trim(),
+        contact: form.contact.trim(),
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+        lastOrder: form.lastOrder || undefined,
+        monthlyTotal: toNumber(form.monthlyTotal),
+      });
+      setForm(EMPTY_SUPPLIER_FORM);
+      setShowForm(false);
+      setMessage('Proveedor agregado correctamente.');
+      await Promise.resolve(onSuppliersChanged());
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo agregar el proveedor.'));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end"><button type="button" onClick={() => window.alert('Formulario de nuevo proveedor listo para conectar al modulo de proveedores.')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" />Nuevo proveedor</button></div>
+      {providerRows.length === 0 && <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 sm:flex-row sm:items-center sm:justify-between"><p>Los nombres de proveedor que aparecían en Inventario se deducían del nombre del producto; no estaban guardados y podían ser incorrectos. Registra aquí los proveedores reales y asígnalos a tus productos desde Inventario.</p><button type="button" onClick={() => setShowForm(true)} className="h-10 shrink-0 rounded-lg bg-neutral-950 px-4 font-semibold text-white">Registrar proveedor</button></div>}
+      <div className="flex justify-end"><button type="button" onClick={() => setShowForm((value) => !value)} className="inline-flex h-10 items-center gap-2 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" />Nuevo proveedor</button></div>
+      {showForm && (
+        <form onSubmit={createSupplier} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-3">
+            <InventoryInput label="Proveedor" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Nombre comercial" />
+            <InventoryInput label="Contacto" value={form.contact} onChange={(value) => setForm((current) => ({ ...current, contact: value }))} placeholder="Persona de contacto" />
+            <InventoryInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="correo@proveedor.pe" />
+            <InventoryInput label="Telefono" value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} placeholder="+51 999 999 999" />
+            <InventoryInput label="Ultimo pedido" value={form.lastOrder} onChange={(value) => setForm((current) => ({ ...current, lastOrder: value }))} placeholder="2026-07-08" />
+            <InventoryInput label="Total mes" value={form.monthlyTotal} onChange={(value) => setForm((current) => ({ ...current, monthlyTotal: value }))} placeholder="0.00" inputMode="decimal" />
+          </div>
+          {(message || error) && <p className={`mt-4 text-sm font-semibold ${error ? 'text-red-600' : 'text-green-700'}`}>{error || message}</p>}
+          <div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setShowForm(false)} className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-semibold">Cancelar</button><button type="submit" disabled={saving || !form.name.trim() || !form.contact.trim()} className="h-10 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Guardando...' : 'Guardar proveedor'}</button></div>
+        </form>
+      )}
+      {!showForm && (message || error) && <p className={`text-sm font-semibold ${error ? 'text-red-600' : 'text-green-700'}`}>{error || message}</p>}
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-5"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar proveedores..." className="h-11 w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm outline-none" /></div></div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Proveedor</th><th className="px-5 py-3 font-medium">Contacto</th><th className="px-5 py-3 font-medium">Productos</th><th className="px-5 py-3 font-medium">Ultimo pedido</th><th className="px-5 py-3 font-medium">Total mes</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead>
-              <tbody>{filteredProviders.map((provider, index) => <tr key={provider.name} onClick={() => setSelectedProvider(provider.name)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-bold">{provider.name}</p><p className="text-xs text-slate-500">{provider.email}</p></td><td className="px-5 py-4"><p className="font-medium">{provider.contact}</p><p className="text-xs text-slate-500">{provider.phone}</p></td><td className="px-5 py-4">{Math.max(5, products.length + index)}</td><td className="px-5 py-4">{provider.lastOrder}</td><td className="px-5 py-4 font-semibold">{formatMoney(provider.total)}</td><td className="px-5 py-4"><span className="rounded-md bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">Activo</span></td></tr>)}</tbody>
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Proveedor</th><th className="px-5 py-3 font-medium">Contacto</th><th className="px-5 py-3 font-medium">Productos asociados</th><th className="px-5 py-3 font-medium">Último pedido</th><th className="px-5 py-3 font-medium">Total mes</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead>
+              <tbody>{filteredProviders.map((provider) => <tr key={provider.id} onClick={() => setSelectedProvider(provider.id)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"><td className="px-5 py-4"><p className="font-bold">{provider.name}</p><p className="text-xs text-slate-500">{provider.email ?? 'Sin email'}</p></td><td className="px-5 py-4"><p className="font-medium">{provider.contact}</p><p className="text-xs text-slate-500">{provider.phone ?? 'Sin telefono'}</p></td><td className="px-5 py-4">{products.filter((product) => (product.supplierId ?? product.supplier?.id) === provider.id).length}</td><td className="px-5 py-4">{provider.lastOrder ? formatDate(provider.lastOrder) : 'Sin pedidos'}</td><td className="px-5 py-4 font-semibold">{formatMoney(provider.monthlyTotal)}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${provider.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{provider.active ? 'Activo' : 'Inactivo'}</span></td></tr>)}{filteredProviders.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-slate-500">{providerRows.length === 0 ? 'No hay proveedores guardados. Registra uno y asígnalo a sus productos desde Inventario.' : 'No encontramos proveedores con esa búsqueda.'}</td></tr>}</tbody>
             </table>
           </div>
         </div>
-        <aside className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">{selected ? <div><h3 className="text-xl font-bold">{selected.name}</h3><p className="mt-1 text-sm text-slate-500">{selected.email}</p><div className="mt-6 space-y-3 text-sm"><DetailLine label="Contacto" value={selected.contact} /><DetailLine label="Telefono" value={selected.phone} /><DetailLine label="Ultimo pedido" value={selected.lastOrder} /><DetailLine label="Total mes" value={formatMoney(selected.total)} /></div></div> : <div className="flex min-h-[280px] flex-col items-center justify-center text-center text-sm text-slate-500"><Users className="mb-3 h-12 w-12 text-slate-300" />Selecciona un proveedor para ver los detalles</div>}</aside>
+        <aside className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">{selected ? <div><h3 className="text-xl font-bold">{selected.name}</h3><p className="mt-1 text-sm text-slate-500">{selected.email ?? 'Sin email registrado'}</p><div className="mt-6 space-y-3 text-sm"><DetailLine label="Contacto" value={selected.contact} /><DetailLine label="Teléfono" value={selected.phone ?? 'Sin teléfono'} /><DetailLine label="Productos asociados" value={String(products.filter((product) => (product.supplierId ?? product.supplier?.id) === selected.id).length)} /><DetailLine label="Último pedido" value={selected.lastOrder ? formatDate(selected.lastOrder) : 'Sin pedidos'} /><DetailLine label="Total mes" value={formatMoney(selected.monthlyTotal)} /></div></div> : <div className="flex min-h-[280px] flex-col items-center justify-center text-center text-sm text-slate-500"><Users className="mb-3 h-12 w-12 text-slate-300" />Selecciona un proveedor para ver los detalles</div>}</aside>
       </section>
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="text-xl font-bold">Pedidos recientes</h3><p className="mt-1 text-sm text-slate-500">Ultimas ordenes de compra</p>
-        <table className="mt-5 w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Fecha</th><th className="px-5 py-3 font-medium">Proveedor</th><th className="px-5 py-3 font-medium">Items</th><th className="px-5 py-3 font-medium">Total</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead><tbody>{recentOrders.map((provider, index) => <tr key={provider.name} className="border-t border-slate-100"><td className="px-5 py-4">{provider.lastOrder}</td><td className="px-5 py-4">{provider.name}</td><td className="px-5 py-4">{8 + index * 3}</td><td className="px-5 py-4">{formatMoney(provider.total / 4)}</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${index === 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{index === 3 ? 'Pendiente' : 'Entregado'}</span></td></tr>)}</tbody></table>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div><h3 className="text-xl font-bold">Productos del inventario</h3><p className="mt-1 text-sm text-slate-500">Los proveedores se asignan desde el formulario de cada producto en Inventario.</p></div>
+          <span className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">{filteredProducts.length} de {products.length} productos</span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_200px_180px_220px]">
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={productQuery} onChange={(event) => setProductQuery(event.target.value)} placeholder="Buscar por nombre, SKU o código..." className="h-10 w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm outline-none focus:border-slate-400" /></div>
+          <select aria-label="Filtrar por categoría" value={productCategory} onChange={(event) => setProductCategory(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none"><option value="Todas">Todas las categorías</option>{productCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
+          <select aria-label="Filtrar por stock" value={productStock} onChange={(event) => setProductStock(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none"><option value="Todos">Todo el stock</option><option value="Bajo">Stock bajo</option><option value="Disponible">Stock disponible</option></select>
+          <select aria-label="Filtrar por proveedor" value={productSupplier} onChange={(event) => setProductSupplier(event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none"><option value="Todos">Todos los proveedores</option><option value="">Sin proveedor</option>{suppliers.filter((supplier) => supplier.active).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3 font-medium">Producto</th><th className="px-4 py-3 font-medium">SKU / Código</th><th className="px-4 py-3 font-medium">Categoría</th><th className="px-4 py-3 font-medium">Proveedor asignado</th><th className="px-4 py-3 font-medium">Stock</th><th className="px-4 py-3 font-medium">Precio</th></tr></thead>
+            <tbody>{filteredProducts.map((product) => { const lowStock = product.stock <= (product.minStock ?? 5); return <tr key={product.id} className="border-t border-slate-100"><td className="px-4 py-3"><p className="font-semibold">{product.name}</p><p className="text-xs text-slate-500">{product.imageUrl ? 'Imagen registrada' : 'Sin imagen'}</p></td><td className="px-4 py-3"><p>{product.sku || 'Sin SKU'}</p><p className="text-xs text-slate-500">{product.barcode || 'Sin código de barras'}</p></td><td className="px-4 py-3">{product.category || 'Sin categoría'}</td><td className="px-4 py-3">{getProductProvider(product)}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${lowStock ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{product.stock} unidades{lowStock ? ' · Bajo' : ''}</span></td><td className="px-4 py-3 font-semibold">{formatMoney(product.price)}</td></tr>; })}{filteredProducts.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">No hay productos que coincidan con esos filtros.</td></tr>}</tbody>
+          </table>
+        </div>
       </section>
     </div>
   );
@@ -1015,14 +1120,13 @@ function ReportsView({ products, sales }: { products: Product[]; sales: Sale[] }
   const totalSales = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const soldUnits = sales.reduce((sum, sale) => sum + countSaleItems(sale), 0);
   const averageTicket = sales.length > 0 ? totalSales / sales.length : 0;
-  const grossMargin = totalSales * 0.406;
   const topProducts = getTopProducts(products, sales);
   const categoryRows = getCategoryDistribution(products);
 
   return (
     <div className="space-y-5">
       <section className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between"><div className="flex gap-2"><button className="rounded-lg bg-neutral-950 px-4 py-2 text-sm font-semibold text-white">Ultimo mes</button><button className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Ultimo trimestre</button><button className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Ultimo ano</button></div><div className="flex gap-3"><input className="h-10 rounded-lg border border-slate-200 px-3 text-sm" type="date" defaultValue="2026-04-01" /><input className="h-10 rounded-lg border border-slate-200 px-3 text-sm" type="date" defaultValue="2026-04-12" /></div></section>
-      <section className="grid gap-5 md:grid-cols-4"><ReportCard icon={<TrendingUp />} tone="green" label="Ventas totales" value={formatMoney(totalSales)} detail="+12% vs mes anterior" /><ReportCard icon={<ShoppingCart />} tone="blue" label="Margen bruto" value={formatMoney(grossMargin)} detail="40.6% de margen" /><ReportCard icon={<Package />} tone="violet" label="Productos vendidos" value={String(soldUnits)} detail="Unidades" /><ReportCard icon={<Users />} tone="orange" label="Ticket promedio" value={formatMoney(averageTicket)} detail="Por transaccion" /></section>
+      <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4"><ReportCard icon={<TrendingUp />} tone="green" label="Ventas totales" value={formatMoney(totalSales)} detail="Acumulado registrado" /><ReportCard icon={<ShoppingCart />} tone="blue" label="Transacciones" value={String(sales.length)} detail="Ventas registradas" /><ReportCard icon={<Package />} tone="violet" label="Productos vendidos" value={String(soldUnits)} detail="Unidades" /><ReportCard icon={<Users />} tone="orange" label="Ticket promedio" value={formatMoney(averageTicket)} detail="Por transacción" /></section>
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.65fr)]"><BarReportChart totalSales={totalSales} /><CategoryReport rows={categoryRows} /></section>
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-xl font-bold">Productos mas vendidos</h3><p className="mt-1 text-sm text-slate-500">Top 5 del periodo</p><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Posicion</th><th className="px-5 py-3 font-medium">Producto</th><th className="px-5 py-3 font-medium">Unidades vendidas</th><th className="px-5 py-3 font-medium">Ingresos</th><th className="px-5 py-3 font-medium">Participacion</th></tr></thead><tbody>{topProducts.map((product, index) => <tr key={product.name} className="border-t border-slate-100"><td className="px-5 py-4"><span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-950 font-bold text-white">{index + 1}</span></td><td className="px-5 py-4 font-semibold">{product.name}</td><td className="px-5 py-4">{product.units}</td><td className="px-5 py-4 font-semibold">{formatMoney(product.income)}</td><td className="px-5 py-4"><div className="h-2 w-36 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-neutral-950" style={{ width: `${product.percent}%` }} /></div></td></tr>)}</tbody></table></div></section>
     </div>
@@ -1081,9 +1185,9 @@ function buildAssistantAnswer(question: string, products: Product[], sales: Sale
   return `Resumen rapido: ${products.length} productos activos, ${lowStock.length} con stock bajo, ${sales.length} ventas registradas y ${formatMoney(todayTotal)} vendido hoy.`;
 }
 
-function SettingsView({ fullName, systemUsers }: { fullName: string; systemUsers: SystemUser[] }) {
+function SettingsView({ fullName, systemUsers, onUsersChanged }: { fullName: string; systemUsers: SystemUser[]; onUsersChanged: () => Promise<void> | void }) {
   const [tab, setTab] = useState<SettingsTab>('subscription');
-  return <div className="grid gap-5 lg:grid-cols-[230px_1fr]"><aside className="h-fit rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><SettingsTabButton active={tab === 'subscription'} icon={<CreditCard />} label="Suscripcion" onClick={() => setTab('subscription')} /><SettingsTabButton active={tab === 'company'} icon={<Building2 />} label="Datos de la Empresa" onClick={() => setTab('company')} /><SettingsTabButton active={tab === 'users'} icon={<Users />} label="Usuarios" onClick={() => setTab('users')} /></aside><div className="space-y-5">{tab === 'subscription' && <SubscriptionSettings />}{tab === 'company' && <CompanySettings />}{tab === 'users' && <UsersSettings ownerName={fullName} systemUsers={systemUsers} />}</div></div>;
+  return <div className="grid gap-5 lg:grid-cols-[230px_1fr]"><aside className="h-fit rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><SettingsTabButton active={tab === 'subscription'} icon={<CreditCard />} label="Suscripcion" onClick={() => setTab('subscription')} /><SettingsTabButton active={tab === 'company'} icon={<Building2 />} label="Datos de la Empresa" onClick={() => setTab('company')} /><SettingsTabButton active={tab === 'users'} icon={<Users />} label="Usuarios" onClick={() => setTab('users')} /></aside><div className="space-y-5">{tab === 'subscription' && <SubscriptionSettings />}{tab === 'company' && <CompanySettings />}{tab === 'users' && <UsersSettings ownerName={fullName} systemUsers={systemUsers} onUsersChanged={onUsersChanged} />}</div></div>;
 }
 
 function SettingsTabButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
@@ -1091,7 +1195,8 @@ function SettingsTabButton({ active, icon, label, onClick }: { active: boolean; 
 }
 
 function SubscriptionSettings() {
-  return <><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="text-xl font-bold">Plan Actual</h3><p className="mt-1 text-sm text-slate-500">Renovacion automatica el 15 de Mayo, 2026</p></div><span className="inline-flex w-fit items-center gap-2 rounded-lg bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-700"><Zap className="h-4 w-4" />Plan Profesional</span></div><div className="mt-6 grid gap-4 sm:grid-cols-4"><DetailMetric label="Tiendas activas" value="2 / 3" /><DetailMetric label="Usuarios" value="8" /><DetailMetric label="Proximo pago" value="S/ 129" /><DetailMetric label="Metodo de pago" value="Visa **** 4532" /></div></section><section><h3 className="text-xl font-bold">Planes disponibles</h3><p className="mt-1 text-sm text-slate-500">Elige el plan que mejor se adapte a tu negocio</p><div className="mt-5 grid gap-5 xl:grid-cols-3"><PlanCard title="Plan Basico" price="S/ 49" tone="blue" features={['1 tienda activa', 'Gestion de inventario', 'Punto de venta', 'Reportes basicos', 'Soporte por email', 'Comprobantes electronicos']} /><PlanCard current title="Plan Profesional" price="S/ 129" tone="violet" features={['Hasta 3 tiendas', 'Todo del Plan Basico', 'Asistente inteligente con IA', 'Reportes avanzados', 'Soporte prioritario 24/7', 'Integracion con proveedores', 'Multi-usuario sin limite']} /><PlanCard title="Plan Enterprise" price="S/ 299" tone="orange" features={['Tiendas ilimitadas', 'Todo del Plan Profesional', 'API personalizada', 'Gerente de cuenta dedicado', 'Capacitacion personalizada', 'SLA garantizado 99.9%', 'Backup automatico diario', 'Personalizacion de marca']} /></div></section><section className="rounded-lg border border-blue-200 bg-blue-50 p-6"><h3 className="font-bold text-blue-900">Tienes mas de 10 tiendas?</h3><p className="mt-2 text-sm text-blue-700">Contactanos para crear un plan personalizado con descuentos por volumen, capacitacion dedicada y soporte empresarial premium.</p><button type="button" onClick={() => window.alert('Solicitud enviada al equipo comercial.')} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Contactar a ventas</button></section></>;
+  const stores = [{ name: 'Tienda Principal', address: 'Av. Los Alamos 456, Lima', status: 'Activa' }];
+  return <><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="text-xl font-bold">Plan Actual</h3><p className="mt-1 text-sm text-slate-500">Renovacion automatica el 15 de agosto de 2026</p></div><span className="inline-flex w-fit items-center gap-2 rounded-lg bg-violet-100 px-4 py-2 text-sm font-semibold text-violet-700"><Zap className="h-4 w-4" />Plan Profesional</span></div><div className="mt-6 grid gap-4 sm:grid-cols-4"><DetailMetric label="Tiendas activas" value={`${stores.length} / 3`} /><DetailMetric label="Usuarios" value="8" /><DetailMetric label="Proximo pago" value="S/ 129" /><DetailMetric label="Metodo de pago" value="Visa **** 4532" /></div></section><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="text-xl font-bold">Tiendas del negocio</h3><p className="mt-1 text-sm text-slate-500">Cada tienda puede tener caja, inventario, ventas y usuarios propios.</p></div><button type="button" onClick={() => window.alert('Alta de tienda pendiente de conectar al backend.')} className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-semibold">Agregar tienda</button></div><div className="mt-5 divide-y divide-slate-100">{stores.map((store) => <div key={store.name} className="flex items-center justify-between gap-4 py-3"><div><p className="font-semibold">{store.name}</p><p className="text-sm text-slate-500">{store.address}</p></div><span className="rounded-md bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">{store.status}</span></div>)}</div></section><section><h3 className="text-xl font-bold">Planes disponibles</h3><p className="mt-1 text-sm text-slate-500">Elige el plan que mejor se adapte a tu negocio</p><div className="mt-5 grid gap-5 xl:grid-cols-3"><PlanCard title="Plan Basico" price="S/ 49" tone="blue" features={['1 tienda activa', 'Gestion de inventario', 'Punto de venta', 'Reportes basicos', 'Soporte por email', 'Comprobantes electronicos']} /><PlanCard current title="Plan Profesional" price="S/ 129" tone="violet" features={['Hasta 3 tiendas', 'Todo del Plan Basico', 'Asistente inteligente con IA', 'Reportes avanzados', 'Soporte prioritario 24/7', 'Integracion con proveedores', 'Multi-usuario sin limite']} /><PlanCard title="Plan Enterprise" price="S/ 299" tone="orange" features={['Tiendas ilimitadas', 'Todo del Plan Profesional', 'API personalizada', 'Gerente de cuenta dedicado', 'Capacitacion personalizada', 'SLA garantizado 99.9%', 'Backup automatico diario', 'Personalizacion de marca']} /></div></section><section className="rounded-lg border border-blue-200 bg-blue-50 p-6"><h3 className="font-bold text-blue-900">Tienes mas de 10 tiendas?</h3><p className="mt-2 text-sm text-blue-700">Contactanos para crear un plan personalizado con descuentos por volumen, capacitacion dedicada y soporte empresarial premium.</p><button type="button" onClick={() => window.alert('Solicitud enviada al equipo comercial.')} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Contactar a ventas</button></section></>;
 }
 
 function DetailMetric({ label, value }: { label: string; value: string }) {
@@ -1107,10 +1212,30 @@ function CompanySettings() {
   return <><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="mb-6 flex items-start justify-between"><div><h3 className="text-xl font-bold">Informacion de la Empresa</h3><p className="mt-1 text-sm text-slate-500">Datos registrados ante SUNAT</p></div><button type="button" onClick={() => window.alert('Edicion de datos de empresa pendiente de conectar al backend.')} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold">Editar</button></div><div className="grid gap-6 sm:grid-cols-2"><DetailMetric label="RUC" value="20612345678" /><DetailMetric label="Razon Social" value="Minimarket San Jose S.A.C." /><DetailMetric label="Nombre Comercial" value="Minimarket San Jose" /><DetailMetric label="Telefono" value="+51 987 654 321" /><DetailMetric label="Direccion Fiscal" value="Av. Los Alamos 456, San Isidro, Lima" /><DetailMetric label="Email Corporativo" value="contacto@minimarketsj.pe" /></div></section><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-xl font-bold">Representante Legal</h3><div className="mt-5 grid gap-6 sm:grid-cols-2"><DetailMetric label="Nombre Completo" value="Juan Carlos Perez Garcia" /><DetailMetric label="DNI" value="12345678" /></div></section><section className="rounded-lg border border-blue-200 bg-blue-50 p-6"><div className="flex gap-4"><span className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600"><Receipt className="h-5 w-5" /></span><div><h3 className="font-bold text-blue-900">Certificado Digital SUNAT</h3><p className="mt-2 text-sm text-blue-700">Estado: Activo - Valido hasta: 15/08/2026</p><button type="button" onClick={() => window.alert('Solicitud de renovacion de certificado registrada.')} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Renovar certificado</button></div></div></section></>;
 }
 
-function UsersSettings({ ownerName, systemUsers }: { ownerName: string; systemUsers: SystemUser[] }) {
+function UsersSettings({ ownerName, systemUsers, onUsersChanged }: { ownerName: string; systemUsers: SystemUser[]; onUsersChanged: () => Promise<void> | void }) {
   const users = systemUsers.length > 0 ? systemUsers : [{ id: 'owner-fallback', fullName: ownerName, email: 'usuario@minimarket.pe', role: 'dueno', active: true }];
   const activeUsers = users.filter((user) => user.active !== false).length;
-  return <><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-bold">Usuarios del Sistema</h3><p className="mt-1 text-sm text-slate-500">Gestiona el acceso y permisos de tu equipo</p></div><button type="button" onClick={() => window.alert('Invitacion preparada. Falta conectar el envio al backend de usuarios.')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white"><Users className="h-4 w-4" />Invitar usuario</button></div><div className="grid gap-4 sm:grid-cols-4"><UserMetric label="Total usuarios" value={String(users.length)} /><UserMetric active label="Activos" value={String(activeUsers)} /><UserMetric label="Duenos" value={String(users.filter((user) => user.role === 'dueno').length)} /><UserMetric label="Cajeros" value={String(users.filter((user) => user.role === 'cajero').length)} /></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Usuario</th><th className="px-5 py-3 font-medium">Rol</th><th className="px-5 py-3 font-medium">Tienda</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead><tbody>{users.map((user) => <tr key={user.id} className="border-t border-slate-100"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-bold">{user.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><div><p className="font-semibold">{user.fullName}</p><p className="text-xs text-slate-500">{user.email}</p></div></div></td><td className="px-5 py-4"><span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">{user.role}</span></td><td className="px-5 py-4">Tienda Principal</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${user.active === false ? 'bg-slate-100 text-slate-700' : 'bg-green-100 text-green-700'}`}>{user.active === false ? 'Inactivo' : 'Activo'}</span></td></tr>)}</tbody></table></div></section><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-xl font-bold">Permisos por Rol</h3><div className="mt-5 grid gap-4 md:grid-cols-3"><RoleCard title="Dueno" items={['Acceso completo', 'Gestion de suscripcion', 'Reportes avanzados', 'Asistente IA']} /><RoleCard title="Cajero" items={['Punto de venta', 'Registro de ventas', 'Control de caja', 'Dashboard basico']} /><RoleCard title="Almacenero" items={['Gestion de inventario', 'Control de stock', 'Gestion de proveedores', 'Dashboard basico']} /></div></section></>;
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  async function changeRole(userId: string, role: string) {
+    if (userId === 'owner-fallback') return;
+    setSavingUserId(userId);
+    setMessage('');
+    setError('');
+    try {
+      await api.patch(`/users/${userId}/role`, { role });
+      setMessage('Rol actualizado correctamente.');
+      await Promise.resolve(onUsersChanged());
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'No se pudo cambiar el rol.'));
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  return <><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-bold">Usuarios del Sistema</h3><p className="mt-1 text-sm text-slate-500">Gestiona el acceso y permisos de tu equipo</p></div><button type="button" onClick={() => window.alert('Invitacion preparada. Falta conectar el envio al backend de usuarios.')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-neutral-950 px-4 text-sm font-semibold text-white"><Users className="h-4 w-4" />Invitar usuario</button></div><div className="grid gap-4 sm:grid-cols-4"><UserMetric label="Total usuarios" value={String(users.length)} /><UserMetric active label="Activos" value={String(activeUsers)} /><UserMetric label="Duenos" value={String(users.filter((user) => user.role === 'dueno').length)} /><UserMetric label="Cajeros" value={String(users.filter((user) => user.role === 'cajero').length)} /></div>{(message || error) && <p className={`mt-4 text-sm font-semibold ${error ? 'text-red-600' : 'text-green-700'}`}>{error || message}</p>}<div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-medium">Usuario</th><th className="px-5 py-3 font-medium">Rol</th><th className="px-5 py-3 font-medium">Tienda</th><th className="px-5 py-3 font-medium">Estado</th></tr></thead><tbody>{users.map((user) => <tr key={user.id} className="border-t border-slate-100"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-bold">{user.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><div><p className="font-semibold">{user.fullName}</p><p className="text-xs text-slate-500">{user.email}</p></div></div></td><td className="px-5 py-4"><select value={user.role} onChange={(event) => changeRole(user.id, event.target.value)} disabled={savingUserId === user.id} className="h-9 rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs font-semibold text-blue-700 outline-none disabled:opacity-60"><option value="dueno">dueno</option><option value="cajero">cajero</option><option value="almacenero">almacenero</option></select></td><td className="px-5 py-4">Tienda Principal</td><td className="px-5 py-4"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${user.active === false ? 'bg-slate-100 text-slate-700' : 'bg-green-100 text-green-700'}`}>{user.active === false ? 'Inactivo' : 'Activo'}</span></td></tr>)}</tbody></table></div></section><section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-xl font-bold">Permisos por Rol</h3><div className="mt-5 grid gap-4 md:grid-cols-3"><RoleCard title="Dueno" items={['Acceso completo', 'Gestion de suscripcion', 'Reportes avanzados', 'Asistente IA']} /><RoleCard title="Cajero" items={['Punto de venta', 'Registro de ventas', 'Control de caja', 'Dashboard basico']} /><RoleCard title="Almacenero" items={['Gestion de inventario', 'Control de stock', 'Gestion de proveedores', 'Dashboard basico']} /></div></section></>;
 }
 
 function UserMetric({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
@@ -1126,10 +1251,5 @@ function InventoryInput({ label, value, onChange, placeholder, inputMode }: { la
 }
 
 function getProductProvider(product: Product) {
-  const value = `${product.name} ${product.category ?? ''}`.toLowerCase();
-  if (value.includes('aceite') || value.includes('fideo')) return 'Alicorp';
-  if (value.includes('leche')) return 'Gloria';
-  if (value.includes('bebida') || value.includes('kola') || value.includes('cola')) return 'AJE Group';
-  if (value.includes('limpieza') || value.includes('papel')) return 'Kimberly Clark';
-  return 'No registrado';
+  return product.supplier?.name ?? 'Sin proveedor asignado';
 }

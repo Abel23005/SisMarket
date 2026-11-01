@@ -13,6 +13,8 @@ import { ProductsModule } from './products/products.module';
 import { SaleItem } from './sales/entities/sale-item.entity';
 import { Sale } from './sales/entities/sale.entity';
 import { SalesModule } from './sales/sales.module';
+import { Supplier } from './suppliers/entities/supplier.entity';
+import { SuppliersModule } from './suppliers/suppliers.module';
 import { User } from './users/entities/user.entity';
 import { UsersModule } from './users/users.module';
 
@@ -29,7 +31,7 @@ import { UsersModule } from './users/users.module';
         username: config.get<string>('DB_USERNAME', 'sismarket'),
         password: config.get<string>('DB_PASSWORD', 'sismarket_secret'),
         database: config.get<string>('DB_DATABASE', 'sismarket'),
-        entities: [User, Product, Sale, SaleItem, CashSession],
+        entities: [User, Product, Sale, SaleItem, CashSession, Supplier],
         synchronize: config.get<string>('NODE_ENV') !== 'production',
         logging: config.get<string>('NODE_ENV') === 'development',
       }),
@@ -42,6 +44,7 @@ import { UsersModule } from './users/users.module';
     ProductsModule,
     SalesModule,
     CashRegisterModule,
+    SuppliersModule,
   ],
   controllers: [HealthController],
 })

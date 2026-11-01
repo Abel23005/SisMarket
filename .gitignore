@@ -8,3 +8,6 @@ build/
 coverage/
 .idea/
 .vscode/
+# Caché de npm
+.npm-cache/
+**/.npm-cache/

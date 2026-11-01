@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from '../common/enums/user-role.enum';
@@ -49,5 +49,23 @@ export class UsersService {
       passwordHash: data.passwordHash,
     });
     return this.usersRepository.save(user);
+  }
+
+  async updateRole(id: string, role: UserRole) {
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    user.role = role;
+    const saved = await this.usersRepository.save(user);
+    return {
+      id: saved.id,
+      username: saved.username,
+      email: saved.email,
+      fullName: saved.fullName,
+      role: saved.role,
+      active: saved.active,
+      createdAt: saved.createdAt,
+    };
   }
 }

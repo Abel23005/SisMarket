@@ -2,9 +2,11 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Product } from '../../products/entities/product.entity';
 
 @Entity('suppliers')
 export class Supplier {
@@ -17,10 +19,10 @@ export class Supplier {
   @Column({ length: 120 })
   contact: string;
 
-  @Column({ length: 160, nullable: true })
+  @Column({ type: 'varchar', length: 160, nullable: true })
   email: string | null;
 
-  @Column({ length: 40, nullable: true })
+  @Column({ type: 'varchar', length: 40, nullable: true })
   phone: string | null;
 
   @Column({ name: 'last_order', type: 'date', nullable: true })
@@ -37,6 +39,9 @@ export class Supplier {
 
   @Column({ default: true })
   active: boolean;
+
+  @OneToMany(() => Product, (product) => product.supplier)
+  products: Product[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

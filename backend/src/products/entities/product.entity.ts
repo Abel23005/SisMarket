@@ -2,11 +2,14 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { SaleItem } from '../../sales/entities/sale-item.entity';
+import { Supplier } from '../../suppliers/entities/supplier.entity';
 
 @Entity('products')
 export class Product {
@@ -36,6 +39,16 @@ export class Product {
 
   @Column({ type: 'varchar', name: 'image_url', nullable: true })
   imageUrl: string | null;
+
+  @Column({ name: 'supplier_id', type: 'uuid', nullable: true })
+  supplierId: string | null;
+
+  @ManyToOne(() => Supplier, (supplier) => supplier.products, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'supplier_id' })
+  supplier: Supplier | null;
 
   @Column({ default: true })
   active: boolean;

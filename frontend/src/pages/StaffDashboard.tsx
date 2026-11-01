@@ -13,12 +13,16 @@ export default function StaffDashboard({
   role,
   products,
   loading,
+  loadWarning,
+  onRefresh,
   onLogout,
 }: {
   fullName?: string;
   role?: string;
   products: Product[];
   loading: boolean;
+  loadWarning: string;
+  onRefresh: () => Promise<void> | void;
   onLogout: () => void;
 }) {
   return (
@@ -42,6 +46,7 @@ export default function StaffDashboard({
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
+        {loadWarning && <div role="alert" className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"><p>{loadWarning}</p><button type="button" onClick={() => void onRefresh()} className="h-10 shrink-0 rounded-lg border border-amber-300 bg-white px-4 font-semibold hover:bg-amber-100">Actualizar</button></div>}
         <div className="mb-8 grid gap-4 sm:grid-cols-3">
           <StatCard
             icon={<Package className="h-5 w-5" />}

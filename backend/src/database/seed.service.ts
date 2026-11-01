@@ -1,9 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { UserRole } from '../common/enums/user-role.enum';
 import { Product } from '../products/entities/product.entity';
+import { Supplier } from '../suppliers/entities/supplier.entity';
 import { User } from '../users/entities/user.entity';
 
 @Injectable()
@@ -15,11 +17,18 @@ export class SeedService implements OnModuleInit {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Product)
     private readonly productsRepository: Repository<Product>,
+    @InjectRepository(Supplier)
+    private readonly suppliersRepository: Repository<Supplier>,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit() {
+    if (this.configService.get<string>('NODE_ENV') === 'production') {
+      return;
+    }
     await this.seedUsers();
     await this.seedProducts();
+    await this.seedSuppliers();
   }
 
   private async seedUsers() {
@@ -121,5 +130,53 @@ export class SeedService implements OnModuleInit {
       products.map((p) => this.productsRepository.create(p)),
     );
     this.logger.log('Productos de ejemplo creados');
+  }
+
+  private async seedSuppliers() {
+    if ((await this.suppliersRepository.count()) > 0) return;
+
+    const suppliers = [
+      {
+        name: 'Alicorp S.A.A.',
+        sku: 'ACE-001',
+      },
+      {
+        name: 'Costeño Alimentos S.A.C.',
+        sku: 'ARR-001',
+      },
+      {
+        name: 'Arca Continental Lindley S.A.',
+        sku: 'BEB-001',
+      },
+      {
+        name: 'Leche Gloria S.A.',
+        sku: 'LEC-001',
+      },
+      {
+        name: 'Productos Tissue del Perú S.A.C.',
+        sku: 'PAP-001',
+      },
+    ];
+
+    for (const data of suppliers) {
+      const supplier = await this.suppliersRepository.save(
+        this.suppliersRepository.create({
+          name: data.name,
+          contact: 'Referencia de marca; confirmar proveedor de compra',
+          monthlyTotal: 0,
+          active: true,
+        }),
+      );
+      const product = await this.productsRepository.findOne({
+        where: { sku: data.sku, active: true },
+      });
+      if (product) {
+        product.supplierId = supplier.id;
+        product.supplier = supplier;
+        await this.productsRepository.save(product);
+      }
+    }
+
+    this.logger.log('Proveedores de referencia creados para productos de ejemplo');
   }
 }

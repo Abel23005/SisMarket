@@ -1,13 +1,8 @@
 import { Store } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
-const TEST_USERS = [
-  { label: 'Dueño', username: 'juan.perez', password: 'admin123' },
-  { label: 'Cajero', username: 'maria.lopez', password: 'cajero123' },
-  { label: 'Almacenero', username: 'carlos.ruiz', password: 'almacen123' },
-];
+import { getApiErrorMessage } from '../lib/apiError';
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -28,35 +23,31 @@ export default function LoginPage() {
     try {
       await login(username.trim(), password);
       navigate('/dashboard');
-    } catch {
-      setError('Usuario o contraseña incorrectos');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Usuario o contraseña incorrectos'));
     } finally {
       setLoading(false);
     }
   }
 
-  function fillTestUser(testUsername: string, testPassword: string) {
-    setUsername(testUsername);
-    setPassword(testPassword);
-    setError('');
-  }
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-10">
+    <main className="grid min-h-dvh bg-white lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="relative hidden overflow-hidden bg-neutral-950 px-12 py-14 text-white lg:flex lg:flex-col lg:justify-between xl:px-20">
+        <div className="absolute -right-32 -top-28 h-96 w-96 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div className="relative flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-neutral-950"><Store className="h-6 w-6" /></span><span className="text-xl font-bold">SisMarket</span></div>
+        <div className="relative max-w-xl"><p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">Gestión de tu negocio</p><h1 className="text-5xl font-bold leading-tight xl:text-6xl">Todo tu minimarket, en un solo lugar.</h1><p className="mt-6 max-w-lg text-lg leading-8 text-slate-300">Controla inventario, ventas y caja con información clara para tomar mejores decisiones.</p></div>
+        <p className="relative text-sm text-slate-400">Acceso seguro para tu equipo.</p>
+      </section>
+      <section className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-8 sm:px-8 lg:bg-white">
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-900 text-white">
-            <Store className="h-7 w-7" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-            SisMarket
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Sistema de gestión operativa
-          </p>
+        <div className="mb-7 text-center lg:hidden">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-950 text-white"><Store className="h-6 w-6" /></div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">SisMarket</h1>
+          <p className="mt-1 text-sm text-gray-500">Gestión operativa para tu negocio</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-7"><h2 className="text-2xl font-bold tracking-tight text-gray-950">Inicia sesión</h2><p className="mt-2 text-sm text-gray-500">Ingresa tus credenciales para continuar.</p></div>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
@@ -104,43 +95,15 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-60"
+              disabled={loading || !username.trim() || !password}
+              className="w-full rounded-xl bg-neutral-950 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? 'Ingresando...' : 'Iniciar sesión'}
             </button>
           </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            ¿No tienes cuenta?{' '}
-            <Link
-              to="/register"
-              className="font-semibold text-gray-900 hover:underline"
-            >
-              Regístrate aquí
-            </Link>
-          </p>
-
-          <div className="mt-8 border-t border-gray-100 pt-6">
-            <p className="mb-3 text-center text-xs font-medium text-gray-500">
-              Usuarios de prueba:
-            </p>
-            <div className="space-y-2">
-              {TEST_USERS.map((u) => (
-                <button
-                  key={u.username}
-                  type="button"
-                  onClick={() => fillTestUser(u.username, u.password)}
-                  className="w-full rounded-lg bg-gray-50 px-3 py-2 text-left text-xs text-gray-600 transition hover:bg-gray-100"
-                >
-                  <span className="font-medium text-gray-800">{u.label}:</span>{' '}
-                  {u.username} / {u.password}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
-    </div>
+      </section>
+    </main>
   );
 }

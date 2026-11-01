@@ -30,8 +30,27 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = 'sismarket_token';
 const USER_KEY = 'sismarket_user';
 
+function initializeToken(): string | null {
+  // Discard sessions created by older versions that survived browser restarts.
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) return null;
+  try {
+    const encodedPayload = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+    if (!encodedPayload) throw new Error('Token inválido');
+    const payload = JSON.parse(atob(encodedPayload)) as { exp?: number };
+    if (!payload.exp || payload.exp * 1000 <= Date.now()) throw new Error('Token vencido');
+    return token;
+  } catch {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
 function loadStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem(USER_KEY);
+  const raw = sessionStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as AuthUser;
@@ -42,13 +61,13 @@ function loadStoredUser(): AuthUser | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem(TOKEN_KEY),
+    initializeToken,
   );
   const [user, setUser] = useState<AuthUser | null>(loadStoredUser);
 
   const saveSession = useCallback((data: AuthResponse) => {
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    sessionStorage.setItem(TOKEN_KEY, data.accessToken);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
     setToken(data.accessToken);
     setUser(data.user);
   }, []);
@@ -71,7 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: input.email.trim(),
         fullName: input.fullName.trim(),
         password: input.password,
-        role: 'cajero',
       });
       saveSession(data);
     },
@@ -79,8 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
   }, []);

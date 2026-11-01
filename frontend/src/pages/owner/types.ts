@@ -8,6 +8,8 @@ export interface Product {
   minStock?: number;
   category: string | null;
   imageUrl?: string | null;
+  supplierId?: string | null;
+  supplier?: Supplier | null;
 }
 
 export interface SaleItem {
@@ -22,12 +24,15 @@ export interface SaleItem {
 export interface Sale {
   id: string;
   ticketNumber: string;
+  cashierId?: string;
+  cashSessionId?: string | null;
   subtotal?: string | number;
   tax?: string | number;
   total: string | number;
   paymentMethod?: string;
   status: string;
   items?: SaleItem[];
+  cashier?: SystemUser;
   createdAt: string;
   nubefactStatus?: string | null;
   nubefactPdfUrl?: string | null;
@@ -37,6 +42,8 @@ export interface Sale {
 
 export interface CashSession {
   id: string;
+  cashierId?: string;
+  cashier?: SystemUser;
   status: string;
   openingAmount: string | number;
   closingAmount: string | number | null;
@@ -52,6 +59,19 @@ export interface SystemUser {
   fullName: string;
   role: string;
   active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contact: string;
+  email?: string | null;
+  phone?: string | null;
+  lastOrder?: string | null;
+  monthlyTotal: string | number;
+  active: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
