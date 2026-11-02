@@ -2,6 +2,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Min,
 } from 'class-validator';
 
@@ -40,4 +41,8 @@ export class UpdateProductDto {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  @IsUUID()
+  @IsOptional()
+  supplierId?: string | null;
 }

@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+:root {
+  --brand-red: #861f2d;
+  --brand-red-dark: #691722;
+  --brand-gold: #c99a45;
+  --brand-ink: #1c292d;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -10,6 +17,69 @@ body {
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: #f7f6f3;
+  color: var(--brand-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100svh;
+  min-width: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--brand-red);
+  outline-offset: 2px;
+}
+
+button.bg-neutral-950:hover,
+a.bg-neutral-950:hover {
+  background-color: var(--brand-red-dark);
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    min-height: auto;
+    background: #ffffff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #electronic-receipt,
+  #electronic-receipt *,
+  #report-print-root,
+  #report-print-root * {
+    visibility: visible;
+  }
+
+  #electronic-receipt,
+  #report-print-root {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none;
+    border: 0;
+    box-shadow: none;
+  }
+
+  #electronic-receipt { page-break-inside: avoid; }
 }

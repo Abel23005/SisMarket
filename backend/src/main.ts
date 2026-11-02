@@ -1,11 +1,15 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { types } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
+types.setTypeParser(1114, (value: string) => new Date(`${value}Z`));
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  app.getHttpAdapter().getInstance().set('trust proxy', config.get<string>('TRUST_PROXY', 'false') === 'true' ? 1 : false);
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(

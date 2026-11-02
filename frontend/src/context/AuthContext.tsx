@@ -9,10 +9,17 @@ import {
 import api from '../lib/api';
 import type { AuthResponse, AuthUser } from '../types/auth';
 
-interface RegisterInput {
+interface InvitationAcceptanceInput {
+  token: string;
+  username: string;
+  password: string;
+}
+
+interface SetupOwnerInput {
   username: string;
   email: string;
   fullName: string;
+  businessName: string;
   password: string;
 }
 
@@ -21,7 +28,9 @@ interface AuthContextValue {
   token: string | null;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
+  acceptInvitation: (input: InvitationAcceptanceInput) => Promise<void>;
+  setupOwner: (input: SetupOwnerInput) => Promise<void>;
+  registerBusiness: (input: SetupOwnerInput) => Promise<void>;
   logout: () => void;
 }
 
@@ -30,8 +39,27 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = 'sismarket_token';
 const USER_KEY = 'sismarket_user';
 
+function initializeToken(): string | null {
+  // Discard sessions created by older versions that survived browser restarts.
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) return null;
+  try {
+    const encodedPayload = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+    if (!encodedPayload) throw new Error('Token inválido');
+    const payload = JSON.parse(atob(encodedPayload)) as { exp?: number };
+    if (!payload.exp || payload.exp * 1000 <= Date.now()) throw new Error('Token vencido');
+    return token;
+  } catch {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
 function loadStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem(USER_KEY);
+  const raw = sessionStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as AuthUser;
@@ -42,13 +70,13 @@ function loadStoredUser(): AuthUser | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem(TOKEN_KEY),
+    initializeToken,
   );
   const [user, setUser] = useState<AuthUser | null>(loadStoredUser);
 
   const saveSession = useCallback((data: AuthResponse) => {
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    sessionStorage.setItem(TOKEN_KEY, data.accessToken);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
     setToken(data.accessToken);
     setUser(data.user);
   }, []);
@@ -64,23 +92,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [saveSession],
   );
 
-  const register = useCallback(
-    async (input: RegisterInput) => {
-      const { data } = await api.post<AuthResponse>('/auth/register', {
+  const acceptInvitation = useCallback(
+    async (input: InvitationAcceptanceInput) => {
+      const { data } = await api.post<AuthResponse>('/auth/accept-invitation', {
+        token: input.token,
         username: input.username.trim(),
-        email: input.email.trim(),
-        fullName: input.fullName.trim(),
         password: input.password,
-        role: 'cajero',
       });
       saveSession(data);
     },
     [saveSession],
   );
 
+  const setupOwner = useCallback(
+    async (input: SetupOwnerInput) => {
+      const { data } = await api.post<AuthResponse>('/auth/setup-owner', input);
+      saveSession(data);
+    },
+    [saveSession],
+  );
+
+  const registerBusiness = useCallback(
+    async (input: SetupOwnerInput) => {
+      const { data } = await api.post<AuthResponse>('/auth/register-business', input);
+      saveSession(data);
+    },
+    [saveSession],
+  );
+
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    void api.post('/auth/logout').catch(() => undefined);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
   }, []);
@@ -91,10 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       isAuthenticated: Boolean(token && user),
       login,
-      register,
+      acceptInvitation,
+      setupOwner,
+      registerBusiness,
       logout,
     }),
-    [user, token, login, register, logout],
+    [user, token, login, acceptInvitation, setupOwner, registerBusiness, logout],
   );
 
   return (

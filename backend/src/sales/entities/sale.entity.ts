@@ -18,6 +18,9 @@ export class Sale {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'uuid', name: 'business_id' })
+  businessId: string;
+
   @Column({ name: 'ticket_number', unique: true })
   ticketNumber: string;
 
@@ -61,6 +64,54 @@ export class Sale {
   })
   status: SaleStatus;
 
+  @Column({ name: 'culqi_charge_id', type: 'varchar', length: 80, nullable: true })
+  culqiChargeId: string | null;
+
+  @Column({ name: 'card_last_four', type: 'varchar', length: 4, nullable: true })
+  cardLastFour: string | null;
+
+
+  @Column({ name: 'nubefact_status', type: 'varchar', length: 30, nullable: true })
+  nubefactStatus: string | null;
+
+  @Column({ name: 'nubefact_series', type: 'varchar', length: 4, nullable: true })
+  nubefactSeries: string | null;
+
+  @Column({ name: 'nubefact_number', type: 'int', nullable: true })
+  nubefactNumber: number | null;
+
+  @Column({ name: 'nubefact_processing_at', type: 'timestamp', nullable: true })
+  nubefactProcessingAt: Date | null;
+
+  @Column({ name: 'nubefact_pdf_url', type: 'text', nullable: true })
+  nubefactPdfUrl: string | null;
+
+  @Column({ name: 'nubefact_xml_url', type: 'text', nullable: true })
+  nubefactXmlUrl: string | null;
+
+  @Column({ name: 'nubefact_cdr_url', type: 'text', nullable: true })
+  nubefactCdrUrl: string | null;
+
+  @Column({ name: 'nubefact_response', type: 'jsonb', nullable: true })
+  nubefactResponse: Record<string, unknown> | null;
+
+  @Column({ name: 'document_type', type: 'varchar', length: 12, default: 'boleta' })
+  documentType: 'boleta' | 'factura';
+
+  @Column({ name: 'customer_document_type', type: 'varchar', length: 2, nullable: true })
+  customerDocumentType: string | null;
+
+  @Column({ name: 'customer_document_number', type: 'varchar', length: 15, nullable: true })
+  customerDocumentNumber: string | null;
+
+  @Column({ name: 'customer_name', type: 'varchar', length: 160, default: 'CONSUMIDOR FINAL' })
+  customerName: string;
+
+  @Column({ name: 'customer_address', type: 'varchar', length: 240, nullable: true })
+  customerAddress: string | null;
+
+  @Column({ name: 'customer_email', type: 'varchar', length: 120, nullable: true })
+  customerEmail: string | null;
   @OneToMany(() => SaleItem, (item) => item.sale, { cascade: true })
   items: SaleItem[];
 

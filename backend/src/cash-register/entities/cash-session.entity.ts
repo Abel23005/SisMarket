@@ -16,6 +16,9 @@ export class CashSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'uuid', name: 'business_id' })
+  businessId: string;
+
   @ManyToOne(() => User, (user) => user.cashSessions, { nullable: false })
   @JoinColumn({ name: 'cashier_id' })
   cashier: User;

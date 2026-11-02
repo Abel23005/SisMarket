@@ -21,8 +21,14 @@ export class User {
   @Column({ length: 120 })
   email: string;
 
-  @Column({ name: 'password_hash' })
-  passwordHash: string;
+  @Column({ type: 'varchar', name: 'password_hash', nullable: true, select: false })
+  passwordHash: string | null;
+
+  @Column({ type: 'uuid', name: 'auth_user_id', nullable: true, unique: true, select: false })
+  authUserId: string | null;
+
+  @Column({ type: 'uuid', name: 'business_id', nullable: true })
+  businessId: string | null;
 
   @Column({ name: 'full_name', length: 120 })
   fullName: string;
