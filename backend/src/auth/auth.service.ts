@@ -20,6 +20,7 @@ import { SetupOwnerDto } from './dto/setup-owner.dto';
 import { AuthSession } from './entities/auth-session.entity';
 import { AuthAuditLog } from './entities/auth-audit-log.entity';
 import { SupabaseAuthService } from './supabase-auth.service';
+import { TenantContextService } from '../database/tenant-context.service';
 
 export interface AuthRequestMetadata { ip?: string; userAgent?: string; }
 
@@ -33,6 +34,7 @@ export class AuthService {
     @InjectRepository(AuthSession) private readonly sessions: Repository<AuthSession>,
     @InjectRepository(AuthAuditLog) private readonly auditLogs: Repository<AuthAuditLog>,
     private readonly supabaseAuth: SupabaseAuthService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   async login(dto: LoginDto, metadata: AuthRequestMetadata = {}) {
@@ -165,9 +167,12 @@ export class AuthService {
   }
 
   private async logAuthEvent(input: { userId?: string; businessId?: string | null; username: string; event: string; successful: boolean; metadata: AuthRequestMetadata }) {
-    await this.auditLogs.save(this.auditLogs.create({ userId: input.userId ?? null, businessId: input.businessId ?? null,
-      username: input.username.slice(0, 120), event: input.event, successful: input.successful,
-      ip: input.metadata.ip ?? null, userAgent: input.metadata.userAgent?.slice(0, 1000) ?? null }));
+    const context = this.tenantContext.current();
+    await this.tenantContext.run({ ...context, systemOperation: true }, () =>
+      this.auditLogs.save(this.auditLogs.create({ userId: input.userId ?? null, businessId: input.businessId ?? null,
+        username: input.username.slice(0, 120), event: input.event, successful: input.successful,
+        ip: input.metadata.ip ?? null, userAgent: input.metadata.userAgent?.slice(0, 1000) ?? null })),
+    );
   }
 
   private async buildAuthResponse(user: {
